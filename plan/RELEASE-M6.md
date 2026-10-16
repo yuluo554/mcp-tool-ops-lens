@@ -153,7 +153,12 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 - **sha256 对账口径**：下载件 sha256 == `py -X utf8 tools/package_release.py --out <zip> --rev v0.1.0`
   重算值（同值同时写在 **Release notes**，不在 zip 内——避免自指）。
 
-**CI run 与 push/tag 事件按 `head_sha` 逐条配对（快照：截至 `33abe1c8`）**：
+**CI run 与 push/tag 事件按 `head_sha` 逐条配对（快照：**截至本文件所在提交**，不是终值）**：
+
+> 口径 = **push 事件数**（不是提交数）：main 每次 push 1 个 run，tag 每次 push 1 个 run
+> （`ci.yml` 的 `on: push` 无 filters → **tag push 实测会触发独立一轮**）。
+> 可复跑规则：`gh api repos/yuluo554/mcp-tool-ops-lens/actions/runs --jq '.total_count'`
+> 必须等于该仓收到的 push 事件数。**本文件所在提交及其后每次 push 各自还会再产生 1 个 run**。
 
 | run id | event | head_branch | head_sha | 结果 | 说明 |
 |---|---|---|---|---|---|
@@ -167,8 +172,8 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 | 38919874423 | push | **v0.1.0** | `33abe1c8` | success | 迁移后 tag push |
 
 - **同 sha 双 run 的判别**：`9a99ab63` 与 `33abe1c8` 各有 main 与 v0.1.0 两条 run —— 靠 `event` + `head_branch` 区分。
-- **对账口径 = push 事件数**（非提交数）：截至 `33abe1c8`，main 收 6 次 push + tag 收 2 次 push = **8 个 run**
-  （`gh api …/actions/runs --jq '.total_count'` = 8）。**本文件所在提交及其后每次 push 各自还会再产生 1 个 run**。
+- 上表为**发布过程的完整快照**（含"首次发布 → 抓缺陷 → 修复 → 迁移 tag"全部轮次）；此后收尾提交
+  （打包器修复等）各产生 1 个 main run，均 success，不逐条补记（避免自指数字追不完，见上方可复跑规则）。
 
 ## 九、缓议项与待核对项全表清零
 

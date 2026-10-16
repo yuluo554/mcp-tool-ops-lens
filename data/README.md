@@ -65,8 +65,22 @@
 
 - **失败判定**：以 M1 核对后的字段语义为准（✅ 已于 2026-10-16 核对，结论见第五节 E）。
 - **重试识别**：同 server + 同 tool 在短时间窗内的连续失败后再次调用，记为一次重试；具体窗口值进配置文件，不写死在代码。
+  - **M3 实现补充（期望值可推导性）**：合成数据的调用节奏按 server 形态区分——重试型 server 的调用间隔
+    落在窗口**内**，其余落在窗口**外**，使该口径能把"重试型"与"高频失败但非重试型"区分开。
+    若所有 server 都用同一节奏，窗口规则会对每个 server 都成立，`expected_retry_count` 就**无法由日志复算**
+    （真值沦为植入断言）。见 `tools/gen_synthetic_logs.py::_validate_retry_separation` 与
+    `tests/test_aggregate.py::test_retry_count_matches_truth_per_server`。
 - **耗时口径**：以日志中工具调用耗时字段（如 lastToolDuration / item_completed 计时）为准；缺失耗时的样本在均值计算中剔除并在报告中说明样本量。
+  - **M3 实现补充**：两侧口径不同源，**不混算均值**——Claude 侧 `duration_available=false`（K4），
+    Codex 侧取 `Wall time`；聚合产物按 `source` 分列。
 - **token 开销口径**：单次工具调用的 message.usage token 数；聚合维度分 server 级与 tool 级两级。
+  - **M3 实现补充**：四项**分列**（`tokens_input`/`output`/`cache_read`/`cache_creation`），
+    不合并出总量列（合并会重复计数缓存）；`token_samples` / `token_missing` 单列表达样本量；
+    均值名带 `turn_` 前缀以明确"轮次归属"。
+- **错误文本归一（M3 修正）**：`error_text` 进 IR 前做**空白归一**（多行折叠为单行）+ 上限截断，
+  **不是**只取首行——两侧日志的失败签名都在第二行及之后（见 §五 A 与 §五 D 的实测文本形态），
+  只留首行会让规则表的 `Command timed out after` / `Exit code: 124` 两条模式永远无法命中。
+- **归因匹配面（M3）**：只在 `error_text` 上匹配；`status != "error"` 的记录（含 `unknown`）一律不参与归因。
 
 ## 五、M1 字段语义核对结论（2026-10-16 本机实测，核对主体：94 个 Claude jsonl + 220 个 Codex rollout）
 

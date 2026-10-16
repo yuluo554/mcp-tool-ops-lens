@@ -31,8 +31,12 @@ def test_every_command_has_help_text():
         assert subs[name].description or subs[name].format_help().strip()
 
 
-def test_scan_is_the_only_implemented_command_for_now():
-    assert IMPLEMENTED_COMMANDS == ("scan",)
+def test_implemented_commands_track_the_built_modules():
+    """已落地子命令清单 = 当前已接通的模块面（M3：scan + aggregate + attribute）。"""
+    assert IMPLEMENTED_COMMANDS == ("scan", "aggregate", "attribute")
+    # 未落地命令必须不在清单里（防"没做却被登记成已做"）
+    for name in ("report", "bench"):
+        assert name not in IMPLEMENTED_COMMANDS
 
 
 def test_scan_accepts_home_flag():
@@ -82,8 +86,9 @@ def test_unimplemented_command_does_not_fake_results(capsys, rules_dir):
 
     骨架期这里给的是退出码 3（阶段未就绪）；该语义已随 M2 退役，
     现按"该命令在本构建里不可用"= 用法错误（2）处理。
+    M3 起 `attribute` 已落地，故此处改用仍未落地的 `report` 作为探针。
     """
-    code = main(["attribute", "--events", "nope.json", "--rules-dir", rules_dir])
+    code = main(["report", "--events", "nope.json", "--out", "out", "--rules-dir", rules_dir])
     captured = capsys.readouterr()
     assert code == exit_codes.EXIT_USAGE
     assert "尚未包含" in captured.err

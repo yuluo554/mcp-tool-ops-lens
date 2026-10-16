@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 六项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -260,6 +260,104 @@ def main():
         "seq 退化成数组下标",
     )
     results.append(_report("seq 退化成数组下标", code, out))
+
+    # =======================================================================
+    # M3 变异项：聚合层与归因层守门
+    # =======================================================================
+    aggregate_py = os.path.join(_REPO, "src", "opslens", "aggregate.py")
+    attribute_py = os.path.join(_REPO, "src", "opslens", "attribute.py")
+    common_py = os.path.join(parsers, "common.py")
+    cli_py = os.path.join(_REPO, "src", "opslens", "cli.py")
+
+    # 17. 失败率分母口径：把 unknown 计入分母（K1 核心的变异）
+    code, out = _mutate(
+        aggregate_py,
+        "    denominator = calls_ok + calls_error  # unknown 不进分母（K1）",
+        "    denominator = calls_ok + calls_error + calls_unknown",
+        ["tests/test_aggregate.py::test_failure_rate_denominator_excludes_unknown",
+         "tests/test_aggregate.py::test_failure_rate_matches_truth_per_server",
+         "tests/test_aggregate.py::test_failure_rate_would_differ_if_unknown_were_counted"],
+        "unknown 计入失败率分母",
+    )
+    results.append(_report("unknown 计入失败率分母", code, out))
+
+    # 18. 对账等式守门：把断言改成恒假（三态之和 != 总数 时不再报错）
+    code, out = _mutate(
+        aggregate_py,
+        "    if calls_ok + calls_error + calls_unknown != calls_total:",
+        "    if False:",
+        ["tests/test_aggregate.py::test_accounting_identity_breaks_are_detected"],
+        "对账等式守门恒假",
+    )
+    results.append(_report("对账等式守门恒假", code, out))
+
+    # 19. 口径唯一性守门：把除法挪进 CLI 层（第二份比率计算的真实故障形态）
+    code, out = _mutate(
+        cli_py,
+        "def _default_home():\n    return os.path.expanduser(\"~\")",
+        "def _default_home():\n    rate = 1 / 2\n    return os.path.expanduser(\"~\")",
+        ["tests/test_aggregate.py::test_binop_div_only_in_aggregate_and_attribute_and_generator"],
+        "除法挪进 CLI 层（口径唯一性）",
+    )
+    results.append(_report("除法挪进 CLI 层（口径唯一性）", code, out))
+
+    # 20. 规则门控：摘掉 status 门（未生效规则进计算路径）
+    config_py = os.path.join(_REPO, "src", "opslens", "config.py")
+    code, out = _mutate(
+        config_py,
+        "            if rule.get(\"status\") != STATUS_VERIFIED:\n                continue",
+        "            if False:\n                continue",
+        ["tests/test_rules_gate.py::test_status_gate_is_independently_load_bearing",
+         "tests/test_attribute.py::test_pending_rule_does_not_enter_computation_path",
+         "tests/test_rules_gate.py::test_ineffective_rules_are_excluded_from_effective_set"],
+        "规则 status 门被摘掉（未生效规则进计算路径）",
+    )
+    results.append(_report("规则 status 门被摘掉（未生效规则进计算路径）", code, out))
+
+    # 21. 规则门控：摘掉 verified_samples 门（无样例规则进计算路径）
+    code, out = _mutate(
+        config_py,
+        "            if not rule.get(\"verified_samples\"):\n                continue",
+        "            if False:\n                continue",
+        ["tests/test_rules_gate.py::test_samples_gate_is_independently_load_bearing",
+         "tests/test_rules_gate.py::test_synthetic_coverage_does_not_satisfy_the_samples_gate"],
+        "规则 samples 门被摘掉（无样例规则进计算路径）",
+    )
+    results.append(_report("规则 samples 门被摘掉（无样例规则进计算路径）", code, out))
+
+    # 22. 归因匹配面：把匹配面从 error_text 放宽到全部事件（成功记录误命中宽模式）
+    code, out = _mutate(
+        attribute_py,
+        "        if event.status != schema.STATUS_ERROR:",
+        "        if False:",
+        ["tests/test_attribute.py::test_only_error_events_participate",
+         "tests/test_attribute.py::test_success_records_are_not_matched",
+         "tests/test_attribute.py::test_unknown_with_error_text_is_not_attributed"],
+        "归因匹配面放宽到成功/unknown 记录",
+    )
+    results.append(_report("归因匹配面放宽到成功/unknown 记录", code, out))
+
+    # 23. 错误文本归一回归：退回"只留首行"（多行失败签名被丢弃）
+    code, out = _mutate(
+        common_py,
+        "    normalized = _WHITESPACE_RUN.sub(\" \", (text or \"\")).strip()",
+        "    normalized = (text or \"\").split(\"\\n\", 1)[0].strip()",
+        ["tests/test_parsers.py::test_error_text_is_whitespace_normalized_not_first_line_only",
+         "tests/test_attribute.py::test_timeout_rule_actually_matches_multiline_error_text"],
+        "错误文本退回首行截断（丢多行失败签名）",
+    )
+    results.append(_report("错误文本退回首行截断（丢多行失败签名）", code, out))
+
+    # 24. 重试口径：把窗口判断改成"永远在窗口内"（保留 `?` 绑定，故是真实的口径失效）
+    code, out = _mutate(
+        aggregate_py,
+        "            AND (ts_seconds - LAG(ts_seconds) OVER w) <= ?",
+        "            AND (ts_seconds - LAG(ts_seconds) OVER w) <= ? * 1000000",
+        ["tests/test_aggregate.py::test_retry_count_matches_truth_per_server",
+         "tests/test_aggregate.py::test_retry_window_change_changes_the_count"],
+        "重试窗口判断恒真（窗口参数失效）",
+    )
+    results.append(_report("重试窗口判断恒真（窗口参数失效）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

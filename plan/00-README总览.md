@@ -15,13 +15,16 @@
 | plan/06-交付对标.md | 评分标准对标、待定决策表、决策记录 | ✅ v1（2026-10-16） |
 | plan/HANDOFF-M1.md | 上一棒交接（M1 数据先行） | ✅（2026-10-16） |
 | plan/HANDOFF-M2.md | 上一棒交接（M2 解析层） | ✅（2026-10-16） |
-| plan/HANDOFF-M3.md | 下一棒交接（M3 聚合归因） | ✅（2026-10-16） |
+| plan/HANDOFF-M3.md | 上一棒交接（M3 聚合归因） | ✅（2026-10-16） |
+| plan/HANDOFF-M4.md | 下一棒交接（M4 真值基准） | ✅（2026-10-16） |
 | data/README.md | 依据查证、数据源可得性、**M1 字段语义实测结论**、口径纪律 | ✅ v1（2026-10-16） |
 | data/synthetic/ | **合成日志 + 植入真值 + 覆盖度 manifest**（生成器产出，随包入仓） | ✅ M1（2026-10-16） |
 | src/opslens/parsers/ | **三解析器 + 版本检测 + 发现逻辑**（纯函数，无规则包/时钟/写盘） | ✅ M2（2026-10-16） |
-| src/opslens/pipeline.py | 编排层（M2 落地 scan 阶段） | ✅ M2（2026-10-16） |
+| src/opslens/aggregate.py | **sqlite3 两级聚合**（对账等式 / 分母不含 unknown / token 分列 / 耗时不可得） | ✅ M3（2026-10-16） |
+| src/opslens/attribute.py | **五分类规则匹配**（K10 门控 / 只在 error_text 上匹配） | ✅ M3（2026-10-16） |
+| src/opslens/pipeline.py | 编排层（M2 落地 scan；M3 接上 aggregate / attribute） | ✅ M3（2026-10-16） |
 | tools/gen_synthetic_logs.py | 合成数据生成器（splitmix64 / 固定 seed / `--check` 位级一致） | ✅ M1（2026-10-16） |
-| tools/mutation_check.py | 变异验证脚本（每个守门"故意弄坏 → 必红"） | ✅ M1+M2（2026-10-16） |
+| tools/mutation_check.py | 变异验证脚本（每个守门"故意弄坏 → 必红"） | ✅ M1+M2+M3（2026-10-16） |
 
 ## 决策记录表
 
@@ -38,6 +41,9 @@
 | 2026-10-16 | **`settings.json` 的 `env` 定为禁读键**；白名单键位勘误为 `permissions.allow` | 实测 `env` 含活体凭据；settings.json 无 `allowedTools`/`mcpServers` 键 |
 | 2026-10-16 | 技术选型：零第三方依赖 + sqlite3 + argparse + 自写渲染器 | 见 plan/02 §一 |
 | 2026-10-16 | **退出码 `3`（阶段未就绪）整项退役** | 骨架期占位语义随 M2 解析层落地消失。四处同步：删常量 → 改 CLI/测试（`not hasattr` 防复活）→ 改文档退出码表（README / plan/02 §六）→ 改决策记录（本表 / plan/06 §五）。未落地子命令改按**用法码 2** 退出并明确报"本构建尚未包含"，不把"没做"包装成一种结果 |
+| 2026-10-16 | **M3 修正 M2 遗留的"错误文本首行截断"缺陷** | 探针实测：两侧日志的失败签名都在**第二行及之后**（Claude `Command timed out after` 在 `Exit code 143` 后；Codex `Exit code: 124` 在 `Script failed` 后）。只留首行 → 规则表这两条模式**永远无法命中**，归因必然与真值不符。**改为空白归一**（多行折叠为单行 + 上限截断），保住签名且保持隐私形态。守门 + 变异项 23 |
+| 2026-10-16 | **M3 修正 M1 合成数据的"重试期望不可推导"缺陷** | 旧数据所有调用间隔 3 秒 → "窗口内失败后再调用"对每个 server 都成立（实测 24/10/1/8/10/18），而 truth 声明"仅重试型 server 有 8 次" → **期望值不可由日志复算**（真值沦为植入断言）。**改为重试型 server 用窗口内节奏（3s）、其余用窗口外节奏（200s）**，并把 `expected_retry_count` 改为**由实际序列 + 窗口规则复算**（与引擎 SQL 实现相互独立）。守门 + 变异项 24 |
+| 2026-10-16 | **口径唯一性白名单扩为三处（含真值生成器）** | `plan/03 §2.3` 原文只列 `aggregate.py` / `attribute.py` / `tests/`。实现时发现生成器必须推导**期望值**，而它与引擎**必须独立**（共用 = 真值沦为引擎自证，K12 明禁）。白名单逐条论证：`aggregate.py` / `attribute.py` / `tools/gen_synthetic_logs.py`（`tests/` 不进扫描面）。见 `tests/test_aggregate.py::DIV_ALLOWED_FILES` |
 
 ## 承诺-证据台账
 
@@ -58,7 +64,7 @@
 | M0 计划与骨架 | plan/00–06 + 可运行骨架（CLI/包/守门/CI 落盘） | `pytest` 双解释器全绿；`opslens --help` 两条通路可跑 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
 | M1 数据先行 | 失败判定字段语义核对、合成日志生成器 + 植入真值 + 规则包 | ⬜ 生成器可产带真值日志、`--check` 位级一致 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
 | M2 解析 | Claude jsonl + claude.json + Codex rollout 三解析器，统一 schema，schema 版本检测 | 统一事件流输出，格式不识别时报错 exit 4 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
-| M3 聚合归因 | 按 server/tool 聚合（调用/失败/重试/耗时/token）+ 规则匹配失败分类 | 口径一处定义，聚合结果确定性可复现 | ⬜ |
+| M3 聚合归因 | 按 server/tool 聚合（调用/失败/重试/耗时/token）+ 规则匹配失败分类 | 口径一处定义，聚合结果确定性可复现 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
 | M4 基准 | 真值基准套件对账，覆盖度口径入 manifest | 对账报告可复跑 | ⬜ |
 | M5 交付 | HTML/Markdown 报告 + 示例报告 + README | 交付物纯本地可达，示例基于合成数据 | ⬜ |
 | M6 发布 | 发布 GitHub 公开仓库 | **三件套：git tag + GitHub Release（附产物，本地留副本 sha256 留档可复验）+ 发布留档 plan/RELEASE-M6.md**；缺任一项即为未达成 | ⬜ |

@@ -765,8 +765,24 @@ def test_error_text_is_truncated_to_configured_limit():
     assert common.truncate_error_text(long_text, 10) == "A" * 10
 
 
-def test_error_text_takes_first_line_only():
-    assert common.truncate_error_text("first line\nsecond line", 240) == "first line"
+def test_error_text_is_whitespace_normalized_not_first_line_only():
+    """M3 修正的接口缺陷：旧实现只留首行 → 丢掉归因所需的失败签名。
+
+    实测两侧日志的失败信号都在**第二行及之后**（Claude 的 `Command timed out after`
+    跟在 `Exit code 143` 后面；Codex 的 `Exit code: 124` 跟在 `Script failed` 后面）。
+    只留首行时，规则表里的这两条模式**永远无法命中**，归因必然与真值不符。
+    现改为空白归一（多行 → 单行），既保住签名又保持"单行 + 上限"的隐私形态。
+    """
+    text = "Exit code 143\nCommand timed out after 10m 0s"
+    got = common.truncate_error_text(text, 240)
+    assert "Command timed out after" in got, "多行失败签名被首行截断丢弃"
+    assert "\n" not in got, "归一后不得残留换行（产物必须是单行形态）"
+    assert got == "Exit code 143 Command timed out after 10m 0s"
+
+
+def test_error_text_collapses_runs_of_whitespace():
+    assert common.truncate_error_text("a  \t b \n\n c", 240) == "a b c"
+    assert common.truncate_error_text("   \n  ", 240) == ""
 
 
 def test_error_text_limit_comes_from_rules_pack():

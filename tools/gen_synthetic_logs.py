@@ -208,6 +208,15 @@ TOKEN_RANGES = {
     "light": {"input": (1500, 4000), "output": (60, 260), "cache_read": (0, 400)},
 }
 
+# 调用节奏（合成数据的**设计常数**，不是引擎阈值）。
+# **M3 复核发现并修正的 M1 缺陷**：旧实现所有调用一律间隔 3 秒，于是"失败后窗口内再次调用"
+# 这个重试口径对**每个** server 都成立（实测 24/10/1/8/10/18），而 truth 声明的期望是
+# "只有重试型 server 有 8 次重试，其余为 0"——期望值不可由日志推导（真值沦为植入断言）。
+# 修正：重试型 server 的调用间隔落在窗口**内**，其余 server 落在窗口**外**，
+# 使窗口规则能把两者区分开（与 truth 的声明一致，见 _validate_retry_separation）。
+_RETRY_CALL_STEP_SECONDS = 3
+_DEFAULT_CALL_STEP_SECONDS = 200
+
 # Codex 侧规格：成败只能靠 `Exit code:` 文本模式（data/README §五 D）
 CODEX_CALLS = [
     {"tool": "exec", "kind": "function_call", "mode": None, "exit_code": 0, "wall": "0.5"},
@@ -309,6 +318,9 @@ def render_claude_log(rng):
     offset = 0
     unknown_seen = {}
     for server, session_id, pairs in _build_claude_events(rng):
+        # 调用节奏：重试型 server 的间隔落在重试窗口内，其余落在窗口外
+        # （使 truth 的 expected_retry_count 可由日志按窗口规则复算，见 _validate_retry_separation）
+        step = _RETRY_CALL_STEP_SECONDS if _is_retry_server(server) else _DEFAULT_CALL_STEP_SECONDS
         lines.append(
             {
                 "type": "system",
@@ -323,10 +335,11 @@ def render_claude_log(rng):
             call_id = "call_{0}_{1:03d}".format(session_id, call_index)
             assistant_uuid = "asst_{0}_{1:03d}".format(session_id, call_index)
             user_uuid = "user_{0}_{1:03d}".format(session_id, call_index)
-            assistant_ts = iso_timestamp(offset, 100 + (call_index % 500))
-            offset += 2
-            user_ts = iso_timestamp(offset, 400 + (call_index % 500))
-            offset += 1
+            # 同一轮内 assistant 与 user 消息共享同一时刻基准，调用间按 step 推进
+            call_offset = offset
+            offset += step
+            assistant_ts = iso_timestamp(call_offset, 100 + (call_index % 500))
+            user_ts = iso_timestamp(call_offset, 400 + (call_index % 500))
 
             lines.append(
                 {
@@ -411,6 +424,66 @@ def _scale_for(server):
         if spec["server"] == server:
             return spec["token_scale"]
     raise KeyError(server)
+
+
+def _is_retry_server(server):
+    for spec in SERVER_SPECS:
+        if spec["server"] == server:
+            return bool(spec.get("retry"))
+    return False
+
+
+def _call_step_for(server):
+    return _RETRY_CALL_STEP_SECONDS if _is_retry_server(server) else _DEFAULT_CALL_STEP_SECONDS
+
+
+def _count_retries(pairs, step_seconds, window_seconds):
+    """按聚合层的重试口径（plan/03 §2.1）在同一 server 的调用序列上实算重试次数。
+
+    口径：同 server + 同 tool 在窗口内失败后再次调用，记一次重试。
+    本函数与 `opslens.aggregate` 的 SQL 实现**相互独立**（生成器不得 import 引擎聚合层，
+    否则真值变成"引擎自证"，K12）。此处只用于让 truth 的 `expected_retry_count`
+    成为**可由输入推导的期望**，而非植入断言。
+    """
+    last_status = {}
+    last_seconds = {}
+    count = 0
+    for index, (status, _mode, tool) in enumerate(pairs):
+        seconds = index * step_seconds
+        if (
+            last_status.get(tool) == "error"
+            and tool in last_seconds
+            and (seconds - last_seconds[tool]) <= window_seconds
+        ):
+            count += 1
+        last_status[tool] = status
+        last_seconds[tool] = seconds
+    return count
+
+
+def _expected_retry_count(server, pairs, window_seconds):
+    """该 server 的期望重试次数（由调用序列 + 节奏常数推导，可复算）。"""
+    return _count_retries(pairs, _call_step_for(server), window_seconds)
+
+
+def _validate_retry_separation(rules):
+    """自校验：truth 声明的重试期望必须能由**实际生成的调用序列**按窗口规则复算。
+
+    这是 M3 复核补上的守门：旧数据里"每个 server 都在窗口内再调用"，
+    使期望值与日志不可对账（真值沦为植入断言）。
+    用与渲染完全相同的 seed 重建序列，故校验打在真实数据上（不是平行实现）。
+    """
+    window = int(rules.params["retry"]["window_seconds"])
+    problems = []
+    for server, _session_id, pairs in _build_claude_events(SplitMix64(DEFAULT_SEED)):
+        declared = next(spec["error"] if spec.get("retry") else 0 for spec in SERVER_SPECS if spec["server"] == server)
+        actual = _expected_retry_count(server, pairs, window)
+        if actual != declared:
+            problems.append(
+                "{0}: 窗口规则实算 {1} 次重试，与声明 {2} 不符".format(server, actual, declared)
+            )
+    if problems:
+        raise SystemExit("[gen] 重试口径自校验失败：{0}".format("; ".join(problems)))
 
 
 def _unknown_quota(server):
@@ -568,6 +641,11 @@ def _codex_output_text(spec):
 def build_truth(rules):
     thresholds = rules.thresholds
     precision = rules.params["rate_precision"]
+    window = int(rules.params["retry"]["window_seconds"])
+    # 用与渲染完全相同的 seed 重建调用序列 → 期望重试次数由真实序列复算（非植入断言）
+    pairs_by_server = dict(
+        (server, pairs) for server, _session, pairs in _build_claude_events(SplitMix64(DEFAULT_SEED))
+    )
     servers = []
     for spec in SERVER_SPECS:
         rate = expected_failure_rate(spec["ok"], spec["error"], precision)
@@ -590,7 +668,9 @@ def build_truth(rules):
                 "expected_suggestion": expected_suggestion(
                     spec["calls"], spec["ok"], spec["error"], thresholds, precision
                 ),
-                "expected_retry_count": spec["error"] if spec.get("retry") else 0,
+                "expected_retry_count": _expected_retry_count(
+                    spec["server"], pairs_by_server[spec["server"]], window
+                ),
                 "failure_modes": modes,
             }
         )
@@ -818,6 +898,7 @@ def build_outputs(rules_dir=None):
     """构建全部产物：返回有序 (相对路径, 文本) 列表。"""
     _validate_specs()
     rules = config.load_rules(rules_dir or DEFAULT_RULES_DIR)
+    _validate_retry_separation(rules)
     rng = SplitMix64(DEFAULT_SEED)
     claude_lines = render_claude_log(rng)
     codex_lines = render_codex_log(rng)

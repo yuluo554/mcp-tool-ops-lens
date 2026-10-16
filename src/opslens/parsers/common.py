@@ -6,6 +6,7 @@
 
 import json
 import os
+import re
 
 from .. import exit_codes
 
@@ -85,16 +86,32 @@ def text_of_content(content):
     return ""
 
 
+_WHITESPACE_RUN = re.compile(r"\s+")
+
+
 def truncate_error_text(text, max_chars=None):
-    """错误文本进 IR 前的截断：取首行 + 上限字符数（plan/04 §二）。
+    """错误文本进 IR 前的归一与截断（plan/04 §二：`prompt` / 代码正文永不落产物）。
+
+    **M3 修正（实测发现的接口缺陷）**：旧实现取"首行"，会**丢掉模块 3 归因所需的失败签名**——
+    实测两侧日志的失败信号都不在首行：Claude 侧为
+    `Exit code 143` + 换行 + `Command timed out after ...`；Codex 侧为
+    `Script failed` + 换行 + `Exit code: 124` + 换行 + `Wall time: ...`。
+    只留首行时，规则表里 `Command timed out after` / `Exit code: 124` 这两条**永远无法命中**，
+    归因结果必然与真值不符（探针实测：timeout 全部落 `other`）。
+
+    现改为**空白归一**：把连续空白（含换行）折叠为单个空格，得到单行文本后再按
+    `max_chars` 截断。这样既保住失败签名，又保持"单行 + 上限"的隐私形态
+    （多行代码正文的版式不会进产物；上限仍由 `params.json` 注入）。
+    该归一形态与规则表 `verified_samples` 的台账记法一致（如
+    `Exit code 143 / Command timed out after 10m 0s`）。
 
     `max_chars` 由调用方从 `data/rules/params.json` 注入（`error_text.max_chars`），
-    传 None 表示不截断。截断是"prompt / 代码正文永不落产物"的实现手段。
+    传 None 表示不截断。
     """
-    first_line = (text or "").split("\n", 1)[0].strip()
-    if max_chars is not None and max_chars > 0 and len(first_line) > max_chars:
-        return first_line[:max_chars]
-    return first_line
+    normalized = _WHITESPACE_RUN.sub(" ", (text or "")).strip()
+    if max_chars is not None and max_chars > 0 and len(normalized) > max_chars:
+        return normalized[:max_chars]
+    return normalized
 
 
 def session_id_from_path(path):

@@ -1,8 +1,8 @@
 """opslens 命令行入口：argparse + 退出码语义（plan/02 §六）。
 
-M2 起 `scan` 已接通解析层（模块 1）。尚未落地的子命令（`aggregate` / `attribute` /
-`report` / `bench`）**明确报"本构建尚未包含"并以用法码（2）退出**，绝不伪造空结果——
-骨架期的退出码 `3`（阶段未就绪）已随 M2 整项退役。
+M2 起 `scan` 已接通解析层（模块 1）；M3 起 `aggregate` / `attribute` 接通聚合层与归因层
+（模块 2/3）。尚未落地的子命令（`report` / `bench`）**明确报"本构建尚未包含"并以用法码（2）
+退出**，绝不伪造空结果——骨架期的退出码 `3`（阶段未就绪）已随 M2 整项退役。
 
 用法：
     opslens scan      --home <目录> [--out events.json] [--rules-dir <目录>]
@@ -26,10 +26,10 @@ from .config import ConfigError, load_rules
 PROG = "opslens"
 
 # 已接通的子命令（其余为"本构建尚未包含"）
-IMPLEMENTED_COMMANDS = ("scan",)
+IMPLEMENTED_COMMANDS = ("scan", "aggregate", "attribute")
 
-# 需要规则包的子命令（口径参数以参数注入解析层，保持解析层纯函数）
-_RULES_COMMANDS = ("scan", "attribute", "report", "bench")
+# 需要规则包的子命令（口径参数以参数注入解析层/聚合层，保持两层纯函数）
+_RULES_COMMANDS = ("scan", "aggregate", "attribute", "report", "bench")
 
 
 def build_parser():
@@ -49,6 +49,7 @@ def build_parser():
     aggregate = subparsers.add_parser("aggregate", help="按 server / tool 两级聚合调用统计")
     aggregate.add_argument("--events", required=True, help="scan 产出的事件流 JSON")
     aggregate.add_argument("--out", default=None, help="聚合结果输出路径（JSON）")
+    _add_rules_dir(aggregate)
 
     attribute = subparsers.add_parser("attribute", help="对失败调用做规则匹配分类")
     attribute.add_argument("--events", required=True, help="scan 产出的事件流 JSON")
@@ -79,6 +80,81 @@ def _not_in_this_build(command):
     )
     sys.stderr.write("[{0}] 实现计划见 plan/05-里程碑.md 与 plan/03-模块详设.md。\n".format(PROG))
     return exit_codes.EXIT_USAGE
+
+
+def _read_events(path):
+    """读入 `scan` 产出的事件流（缺文件 / 结构非法 → 数据不可用，exit 4）。"""
+    if not os.path.isfile(path):
+        raise exit_codes.DataUnavailableError("事件流文件不存在：{0}".format(path))
+    try:
+        payload = serialize.read_json(path)
+    except ValueError as exc:
+        raise exit_codes.DataUnavailableError("事件流不是合法 JSON：{0}（{1}）".format(path, exc))
+    return pipeline.events_from_payload(payload)
+
+
+def _run_aggregate(args, rules):
+    events = _read_events(args.events)
+    if not events:
+        raise exit_codes.DataUnavailableError("事件流为空：{0}".format(args.events))
+    payload = pipeline.aggregate_events(events, rules)
+
+    if args.out:
+        serialize.write_json(args.out, payload)
+
+    totals = payload["totals"]
+    sys.stdout.write(
+        "[{0}] 聚合完成：{1} 次调用（ok={2} error={3} unknown={4}）/ {5} 个 server\n".format(
+            PROG,
+            totals["calls_total"],
+            totals["calls_ok"],
+            totals["calls_error"],
+            totals["calls_unknown"],
+            totals["servers"],
+        )
+    )
+    for row in payload["server_level"]:
+        rate = "n/a" if row["failure_rate"] is None else "{0:.6f}".format(row["failure_rate"])
+        sys.stdout.write(
+            "  - {0}/{1}：失败率 {2}（{3}/{4}） unknown={5} 重试={6}\n".format(
+                row["source"],
+                row["server"],
+                rate,
+                row["failure_rate_numerator"],
+                row["failure_rate_denominator"],
+                row["calls_unknown"],
+                row["retry_count"],
+            )
+        )
+    if args.out:
+        sys.stdout.write("  - 聚合结果已写出：{0}\n".format(args.out))
+    return exit_codes.EXIT_OK
+
+
+def _run_attribute(args, rules):
+    events = _read_events(args.events)
+    if not events:
+        raise exit_codes.DataUnavailableError("事件流为空：{0}".format(args.events))
+    payload = pipeline.attribute_events(events, rules)
+
+    if args.out:
+        serialize.write_json(args.out, payload)
+
+    totals = payload["totals"]
+    sys.stdout.write(
+        "[{0}] 归因完成：{1} 次失败调用（命中 {2} / 落 other {3}）\n".format(
+            PROG, totals["calls_error"], totals["matched"], totals["other"]
+        )
+    )
+    for item in payload["by_category"]:
+        sys.stdout.write("  - {0}：{1}\n".format(item["category"], item["calls"]))
+    if payload["ineffective_rules"]:
+        sys.stderr.write("[{0}] 未生效规则 {1} 条（未进计算路径，原因已登记在产物）：\n".format(PROG, len(payload["ineffective_rules"])))
+        for item in payload["ineffective_rules"]:
+            sys.stderr.write("  - {0}：{1}\n".format(item["id"], "；".join(item["reasons"])))
+    if args.out:
+        sys.stdout.write("  - 归因结果已写出：{0}\n".format(args.out))
+    return exit_codes.EXIT_OK
 
 
 def _default_home():
@@ -138,6 +214,10 @@ def main(argv=None):
             rules = load_rules(args.rules_dir)
         if args.command == "scan":
             return _run_scan(args, rules)
+        if args.command == "aggregate":
+            return _run_aggregate(args, rules)
+        if args.command == "attribute":
+            return _run_attribute(args, rules)
         return _not_in_this_build(args.command)
     except ConfigError as exc:
         sys.stderr.write("[{0}] 规则包错误：{1}\n".format(PROG, exc))

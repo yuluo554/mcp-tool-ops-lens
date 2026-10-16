@@ -5,9 +5,9 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层已完成；M3–M6 见 `plan/05-里程碑.md`）。
-> 当前可用的子命令只有 `scan`（解析层）；`aggregate` / `attribute` / `report` / `bench` 尚未落地，
-> 调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
+> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层、M3 聚合归因已完成；M4–M6 见 `plan/05-里程碑.md`）。
+> 当前可用的子命令：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）；
+> `report` / `bench` 尚未落地，调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
 >
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
@@ -36,10 +36,10 @@ pip install -e ".[dev]"
 # 1) 解析本机构建统一事件流（只读，不修改任何配置）—— M2 已可用
 opslens scan --home ~ --out events.json
 
-# 2) 按 server / tool 两级聚合（调用数 / 失败率 / token 开销）—— M3
+# 2) 按 server / tool 两级聚合（调用数 / 失败率 / token 开销）—— M3 已可用
 opslens aggregate --events events.json --out agg.json
 
-# 3) 对失败调用做规则匹配分类（超时 / 权限拒绝 / 参数错误 / 内容拒绝 / 其他）—— M3
+# 3) 对失败调用做规则匹配分类（超时 / 权限拒绝 / 参数错误 / 内容拒绝 / 其他）—— M3 已可用
 opslens attribute --events events.json --out attr.json
 
 # 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）—— M5
@@ -49,15 +49,33 @@ opslens report --events events.json --out examples/
 opslens bench
 ```
 
-> 尚未落地的子命令会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
+> 尚未落地的子命令（`report` / `bench`）会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
 
 `python -m opslens <命令>` 与上面的 `opslens <命令>` 等价（两条通路都可用）。
 
 选项：
 - `--home <目录>`：数据源根目录，缺省为当前用户 home。**测试与演示请显式传临时目录**，避免误扫真实会话。
-- `--out <文件>`：`scan` 的事件流输出路径（JSON）；省略则只打印摘要。
+- `--out <文件>`：`scan` / `aggregate` / `attribute` 的产物输出路径（JSON）；省略则只打印摘要。
+- `--events <文件>`：`scan` 产出的事件流 JSON（`aggregate` / `attribute` 的输入）。
 - `--rules-dir <目录>`：规则包目录，缺省 `data/rules/`。
 - `--only <套件>`：`bench` 只跑指定套件。
+
+### 聚合与归因（M3）口径要点
+
+| 项 | 口径 | 落点 |
+|---|---|---|
+| 成败三态 | `ok` / `error` / `unknown`；**三者相加 = 总数**（对账等式，锁进测试） | `aggregate.py` |
+| 失败率 | 分母 = `ok + error`，**不含 `unknown`**；分母为 0 → `null` + `insufficient_data=true` | `aggregate.py` |
+| token | 四项（`input`/`output`/`cache_read`/`cache_creation`）**分列**；`token_samples` / `token_missing` 单列；均值名带 `turn_` 前缀 | `aggregate.py` |
+| 耗时 | Claude 侧 `null` + `duration_available=false`（**不用 `lastToolDuration` 冒充**）；Codex 侧取 `Wall time`，两侧不混算 | `aggregate.py` |
+| 重试 | 同 server + 同 tool 在**时间窗**内失败后再次调用记一次；窗口值来自 `params.json`（不写死） | `aggregate.py` |
+| 两级维度 | server 级 `GROUP BY source, server`；tool 级 `GROUP BY source, server, tool`；**两级都输出 `unknown` 计数** | `aggregate.py` |
+| 失败分类 | `timeout` / `permission_denied` / `invalid_args` / `content_refusal` / `other` | `attribute.py` |
+| 规则门控 | `status=="verified"` **且** `verified_samples` 非空才进计算路径；未生效规则落 `other` 并**列出原因** | `config.py` → `attribute.py` |
+| 匹配面 | **只在 `error_text` 上匹配**（宽模式会在成功记录的正常输出上误命中） | `attribute.py` |
+
+**口径唯一性守门**：AST 断言除法运算（`BinOp(Div)`）只出现在 `aggregate.py` / `attribute.py` / 真值生成器
+（生成器须与引擎独立，否则真值沦为"引擎自证"）——防报告层或 CLI 层出现第二份比率计算。
 
 ### 解析层（M2）已支持的范围
 

@@ -105,10 +105,15 @@ jobs:
       - name: Committed example report is byte-identical on regeneration
         shell: bash
         run: |
-          set -e
           # examples/ 只入仓三份报告产物；事件流是中间件，由合成数据在 CI 内重建
           python -m opslens scan --home data/synthetic --out ci-example-events.json
+          # report 检出"建议移除"时按契约退出码 1（不是跑挂）——不能用 set -e 直接串，
+          # 须显式断言退出码后再比对产物（首跑实测：set -e 会在 report 处提前中断，cmp 从未执行）
+          set +e
           python -m opslens report --events ci-example-events.json --out ci-example-report
+          code=$?
+          set -e
+          test "$code" = "1" || { echo "expected exit 1 (findings), got $code"; exit 1; }
           cmp ci-example-report/report.md examples/report.md || { echo "examples/report.md drifted"; exit 1; }
           cmp ci-example-report/report.html examples/report.html || { echo "examples/report.html drifted"; exit 1; }
           cmp ci-example-report/report.json examples/report.json || { echo "examples/report.json drifted"; exit 1; }

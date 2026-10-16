@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 一项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -511,6 +511,19 @@ def main():
         "未生效规则清单从报告载荷消失",
     )
     results.append(_report("未生效规则清单从报告载荷消失", code, out))
+
+    # 37.（M6 新增）CI 的 report 步骤接线：摘掉 `set +e` → 守门必红
+    #     真实故障形态：`report` 按契约退出码 1（检出问题），CI bash 步骤用 `set -e` 直接串
+    #     会在 report 处提前中断，`cmp` 从未执行（M6 CI 首跑四矩阵同点全红的根因）。
+    ci_yml = os.path.join(_REPO, ".github", "workflows", "ci.yml")
+    code, out = _mutate(
+        ci_yml,
+        "          set +e\n          python -m opslens report --events ci-example-events.json --out ci-example-report",
+        "          python -m opslens report --events ci-example-events.json --out ci-example-report",
+        ["tests/test_report.py::test_committed_examples_are_byte_identical_to_regeneration"],
+        "CI report 步骤摘掉 set +e（契约退出码 1 处提前中断）",
+    )
+    results.append(_report("CI report 步骤摘掉 set +e（契约退出码 1 处提前中断）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

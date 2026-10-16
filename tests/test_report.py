@@ -547,6 +547,38 @@ def test_committed_examples_are_byte_identical_to_regeneration(tmp_out):
     finally:
         os.chdir(cwd)
 
+    _assert_ci_example_step_handles_report_exit_code()
+
+
+def _assert_ci_example_step_handles_report_exit_code():
+    """同一道门的 CI 侧接线必须正确：`report` 按契约退出码 1（检出问题），CI 的 bash 步骤
+    不得用 `set -e` 直接串——否则 `report` 处提前中断，`cmp` 从未执行，门变成空转。
+
+    M6 CI 首跑实录：本文件既有的重生成断言**在进程内**跑（走 `pipeline` API），
+    从未覆盖 CI 的 shell 步骤 → 四矩阵首跑同点全红（`set -e` 于 `report` 处中断）。
+    守门必须打在"接线"上，否则"本机全绿"掩盖"CI 步骤坏了"。
+    """
+    workflow = os.path.join(REPO_ROOT, ".github", "workflows", "ci.yml")
+    with open(workflow, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    # 步骤边界 = 顶层 `- name:`（缩进 6 空格）；只在**同一步骤内**找 set 开关与退出码断言，
+    # 防"上一步骤的 set +e"被误当本步骤的（那会是假门）。
+    step_starts = [i for i, ln in enumerate(lines) if ln.startswith("      - name:")]
+    assert step_starts, "ci.yml 步骤边界扫描面为空（解析失败）"
+    report_lines = [i for i, ln in enumerate(lines) if "python -m opslens report" in ln]
+    assert report_lines, "CI 未接线 report 步骤（扫描面为空 → 守门可能空转）"
+    for i in report_lines:
+        start = max(s for s in step_starts if s < i)
+        before = [ln.strip() for ln in lines[start:i]]
+        window_after = "\n".join(lines[i:i + 8])
+        # 只认"整行就是 set +e"的命令行，不认注释里的散文（防"注释里写了 set +e"造成假通过）
+        assert "set +e" in before, (
+            "CI 的 report 步骤（第 {0} 行）缺 `set +e` 命令行：set -e 会在 report 的契约退出码 1 处提前中断".format(i + 1)
+        )
+        assert "code=$?" in window_after and 'test "$code"' in window_after, (
+            "CI 的 report 步骤（第 {0} 行）后缺退出码捕获与断言".format(i + 1)
+        )
+
 
 def test_committed_examples_contain_no_external_resources():
     """入仓的 HTML/MD 示例断网可开（零外链）——产物级复核，不只查渲染出口。"""

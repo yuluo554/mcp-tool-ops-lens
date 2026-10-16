@@ -60,6 +60,10 @@ def _file_bytes(name, rev=None):
         return handle.read()
 
 
+def _top_prefix(version):
+    return "mcp-tool-ops-lens-{0}".format(version)
+
+
 def build_zip(out_path, version, rev=None):
     names = _tracked_files(rev)
     assert len(names) >= 40, "打包面只有 {0} 个文件，疑似 git 清单空转".format(len(names))

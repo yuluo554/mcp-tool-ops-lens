@@ -221,3 +221,22 @@ def test_desensitize_auditor_selftest_and_tracked_scan_are_clean():
         assert "pkg/a.py" in names, "无 .git 兜底未扫到普通文件：{0}".format(names)
         assert not any(n.startswith(".venv/") for n in names), "无 .git 兜底未剪掉 venv"
         assert source != "git ls-files", "无 .git 树不应走 git 通路"
+
+    # ⑤ 发布打包器（tools/package_release.py）必须可跑且确定性：
+    #    改 `--rev` 时曾因漏掉 `_top_prefix` 定义直接 NameError（发布期实测抓出）——
+    #    守门按"两跑同字节"打在打包器上，防"发布工具本身坏了"。
+    pkg = os.path.join(REPO_ROOT, "tools", "package_release.py")
+    assert os.path.isfile(pkg)
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        out1 = os.path.join(tmp, "a.zip")
+        out2 = os.path.join(tmp, "b.zip")
+        env = dict(os.environ, PYTHONUTF8="1")
+        for out in (out1, out2):
+            proc = subprocess.run([sys.executable, "-X", "utf8", pkg, "--out", out],
+                                  cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            assert proc.returncode == 0, "打包器退出 {0}：{1}".format(
+                proc.returncode, proc.stdout.decode("utf-8", "replace")[-500:])
+        with open(out1, "rb") as h1, open(out2, "rb") as h2:
+            assert h1.read() == h2.read(), "打包器两跑字节不一致（确定性被破坏）"

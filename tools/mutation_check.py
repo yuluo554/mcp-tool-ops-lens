@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 四项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 五项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -560,6 +560,18 @@ def main():
         "无 git 兜底失效（导出树里直接崩）",
     )
     results.append(_report("无 git 兜底失效（导出树里直接崩）", code, out))
+
+    # 41.（M6 新增）发布打包器确定性失效：把固定时间戳改成"当前时间" → 守门必红
+    #     真实故障形态：zip 每次打包哈希都变，"sha256 留档"失去意义（无法核对用户下载的是不是这份）。
+    pkg_py = os.path.join(_HERE, "package_release.py")
+    code, out = _mutate(
+        pkg_py,
+        "FIXED_DATE = (2026, 10, 16, 0, 0, 0)",
+        "FIXED_DATE = (2026, 10, 16, 0, 0, __import__('os').getpid())",
+        ["tests/test_privacy.py::test_desensitize_auditor_selftest_and_tracked_scan_are_clean"],
+        "发布打包器时间戳非固定（两跑哈希漂移）",
+    )
+    results.append(_report("发布打包器时间戳非固定（两跑哈希漂移）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

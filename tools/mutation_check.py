@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""M1 变异验证：每个新守门"故意弄坏 → 必红"。
+"""门禁变异验证：每个新守门"故意弄坏 → 必红"。
 
 纪律（HANDOFF-M1 §四 血泪）：
   · 替换前 assert marker 存在；替换后 assert 文件已变（防静默 no-op）。
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -183,6 +183,83 @@ def main():
         "覆盖度登记指向无该类失败的 server",
     )
     results.append(_report("覆盖度登记指向无该类失败的 server", code, out))
+
+    # =======================================================================
+    # M2 变异项：解析层守门
+    # =======================================================================
+    parsers = os.path.join(_REPO, "src", "opslens", "parsers")
+    versions_py = os.path.join(parsers, "versions.py")
+    claude_py = os.path.join(parsers, "claude_jsonl.py")
+    codex_py = os.path.join(parsers, "codex_rollout.py")
+    config_py = os.path.join(parsers, "claude_config.py")
+
+    # 11. 版本检测"万能匹配"：把不在集合内的判断改成恒假（永远放行）
+    code, out = _mutate(
+        versions_py,
+        "    if version not in SUPPORTED_CLAUDE_VERSIONS:",
+        "    if False:",
+        ["tests/test_parsers.py::test_unknown_claude_version_raises_data_unavailable",
+         "tests/test_parsers.py::test_version_check_is_exact_membership_not_pattern_match"],
+        "Claude 版本集合改万能匹配",
+    )
+    results.append(_report("Claude 版本集合改万能匹配", code, out))
+
+    # 12. Codex 版本检测同样改万能匹配
+    code, out = _mutate(
+        versions_py,
+        "    if cli_version not in SUPPORTED_CODEX_CLI_VERSIONS:",
+        "    if False:",
+        ["tests/test_parsers.py::test_unknown_codex_cli_version_raises_data_unavailable"],
+        "Codex 版本集合改万能匹配",
+    )
+    results.append(_report("Codex 版本集合改万能匹配", code, out))
+
+    # 13. 三态：把缺失 is_error 洗成 ok（本题正确性核心的变异）
+    code, out = _mutate(
+        claude_py,
+        "        notes.append(\"status_undeclared\")\n        return schema.STATUS_UNKNOWN, common.text_of_content(block.get(\"content\"))",
+        "        notes.append(\"status_undeclared\")\n        return schema.STATUS_OK, common.text_of_content(block.get(\"content\"))",
+        ["tests/test_parsers.py::test_unknown_is_not_silently_promoted_to_ok",
+         "tests/test_parsers.py::test_claude_three_state_counts_reconcile_with_truth"],
+        "缺失 is_error 被洗成 ok",
+    )
+    results.append(_report("缺失 is_error 被洗成 ok", code, out))
+
+    # 14. Codex：把"无 Exit code 文本"当成 ok（哑值当判据的同族错误）
+    code, out = _mutate(
+        codex_py,
+        "            if exit_code is None:\n                status = schema.STATUS_UNKNOWN",
+        "            if exit_code is None:\n                status = schema.STATUS_OK",
+        ["tests/test_parsers.py::test_codex_three_state_counts_reconcile_with_truth",
+         "tests/test_parsers.py::test_codex_missing_exit_code_text_is_unknown"],
+        "Codex 无退出码文本被洗成 ok",
+    )
+    results.append(_report("Codex 无退出码文本被洗成 ok", code, out))
+
+    # 15. env 禁读：把禁读键搬进输出结构（隐私红线变异）
+    # 注意：只改 `picked = dict(raw)` 是**假变异**——输出结构是按显式键重建的，
+    # 整体透传并不泄漏 env（本项首版就是这么写的，跑出 exit=0 才发现）。
+    # 真实故障形态是"有人往输出结构里加了一个 env 字段"，故按该形态变异。
+    code, out = _mutate(
+        config_py,
+        "        \"enabled_plugins\": _plugin_names(picked.get(\"enabledPlugins\")),\n    }",
+        "        \"enabled_plugins\": _plugin_names(picked.get(\"enabledPlugins\")),\n        \"env\": raw.get(\"env\"),\n    }",
+        ["tests/test_parsers.py::test_env_credential_never_reaches_output",
+         "tests/test_parsers.py::test_env_credential_absent_from_end_to_end_events"],
+        "env 进产物结构（隐私红线）",
+    )
+    results.append(_report("env 进产物结构（隐私红线）", code, out))
+
+    # 16. seq 退化成数组下标（K11 最硬形态的变异）
+    code, out = _mutate(
+        claude_py,
+        "                        \"line\": line_no,\n                        \"seq\": line_no,",
+        "                        \"line\": line_no,\n                        \"seq\": len(calls),",
+        ["tests/test_parsers.py::test_claude_seq_is_source_line_number_not_array_index",
+         "tests/test_parsers.py::test_seq_is_not_the_compacted_index"],
+        "seq 退化成数组下标",
+    )
+    results.append(_report("seq 退化成数组下标", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

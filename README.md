@@ -5,7 +5,10 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行已完成；M2–M6 见 `plan/05-里程碑.md`）。
+> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层已完成；M3–M6 见 `plan/05-里程碑.md`）。
+> 当前可用的子命令只有 `scan`（解析层）；`aggregate` / `attribute` / `report` / `bench` 尚未落地，
+> 调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
+>
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
 ## 为什么需要它
@@ -30,28 +33,43 @@ pip install -e ".[dev]"
 ## 使用
 
 ```bash
-# 1) 解析本机构建统一事件流（只读，不修改任何配置）
+# 1) 解析本机构建统一事件流（只读，不修改任何配置）—— M2 已可用
 opslens scan --home ~ --out events.json
 
-# 2) 按 server / tool 两级聚合（调用数 / 失败率 / token 开销）
+# 2) 按 server / tool 两级聚合（调用数 / 失败率 / token 开销）—— M3
 opslens aggregate --events events.json --out agg.json
 
-# 3) 对失败调用做规则匹配分类（超时 / 权限拒绝 / 参数错误 / 内容拒绝 / 其他）
+# 3) 对失败调用做规则匹配分类（超时 / 权限拒绝 / 参数错误 / 内容拒绝 / 其他）—— M3
 opslens attribute --events events.json --out attr.json
 
-# 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）
+# 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）—— M5
 opslens report --events events.json --out examples/
 
-# 5) 真值基准对账（引擎输出 vs 合成日志植入的真值）
+# 5) 真值基准对账（引擎输出 vs 合成日志植入的真值）—— M4
 opslens bench
 ```
+
+> 尚未落地的子命令会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
 
 `python -m opslens <命令>` 与上面的 `opslens <命令>` 等价（两条通路都可用）。
 
 选项：
 - `--home <目录>`：数据源根目录，缺省为当前用户 home。**测试与演示请显式传临时目录**，避免误扫真实会话。
+- `--out <文件>`：`scan` 的事件流输出路径（JSON）；省略则只打印摘要。
 - `--rules-dir <目录>`：规则包目录，缺省 `data/rules/`。
 - `--only <套件>`：`bench` 只跑指定套件。
+
+### 解析层（M2）已支持的范围
+
+| 数据源 | 布局 | 版本检测键 |
+|---|---|---|
+| Claude Code 会话日志 | `~/.claude/projects/*/*.jsonl` | 行顶层 `version` |
+| Codex rollout | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `session_meta.payload.cli_version` |
+| Claude Code 配置 | `~/.claude.json`、`~/.claude/settings.json`、插件清单 | —（配置侧事实，非事件流） |
+
+日志**按首行形态判别**归属解析器（不靠目录名），故真实布局与 `data/synthetic/logs/` 走同一条通路。
+检测键取值不在**显式支持集**内 → 退出码 4 并打印"未识别版本 + 期望集合 + 检测键路径"，
+**绝不静默按最宽松规则解析**。
 
 ## 退出码
 
@@ -59,9 +77,11 @@ opslens bench
 |---|---|
 | 0 | 成功 |
 | 1 | 运行完成但**检出问题**（如命中"建议移除"、基准未达标）——不是跑挂 |
-| 2 | 用法错误 / 未知名 / 参数非法 |
-| 3 | 阶段未就绪（当前骨架期占位，不伪造空结果；随模块落地退役） |
-| 4 | 数据不可用（数据源目录不存在 / schema 版本不识别） |
+| 2 | 用法错误 / 未知名 / 参数非法 / **本构建尚未包含的命令** |
+| 4 | 数据不可用（数据源目录不存在或为空 / schema 版本不识别） |
+
+> 退出码 `3`（阶段未就绪）是骨架期的占位语义，已随 M2 解析层落地**整项退役**；
+> 测试用 `not hasattr` 断言防其复活。
 
 ## 数据来源（只读）
 

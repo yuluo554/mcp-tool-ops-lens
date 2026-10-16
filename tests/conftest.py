@@ -13,6 +13,7 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(REPO_ROOT, "src")
 RULES_DIR = os.path.join(REPO_ROOT, "data", "rules")
+SYNTHETIC_DIR = os.path.join(REPO_ROOT, "data", "synthetic")
 
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -40,6 +41,29 @@ def tmp_out():
 @pytest.fixture
 def rules_dir():
     return RULES_DIR
+
+
+@pytest.fixture
+def synthetic_home(tmp_home):
+    """把合成日志摆进**本机真实布局**的临时 home。
+
+    `~/.claude/projects/<proj>/<session>.jsonl` 与
+    `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` —— 让发现逻辑走真实路径形态，
+    而不是靠"目录恰好叫 logs"这种巧合。
+    """
+    claude_dir = os.path.join(tmp_home, ".claude", "projects", "proj-alpha")
+    codex_dir = os.path.join(tmp_home, ".codex", "sessions", "2026", "10", "16")
+    os.makedirs(claude_dir)
+    os.makedirs(codex_dir)
+    shutil.copyfile(
+        os.path.join(SYNTHETIC_DIR, "logs", "claude_alpha.jsonl"),
+        os.path.join(claude_dir, "sess-claude-alpha.jsonl"),
+    )
+    shutil.copyfile(
+        os.path.join(SYNTHETIC_DIR, "logs", "codex_alpha.jsonl"),
+        os.path.join(codex_dir, "rollout-2026-10-16T00-00-00-sess-codex-alpha.jsonl"),
+    )
+    return tmp_home
 
 
 @pytest.fixture

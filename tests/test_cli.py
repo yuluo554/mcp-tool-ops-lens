@@ -1,12 +1,13 @@
-"""CLI 契约测试：参数面锁定 + 骨架期不伪造空结果。"""
+"""CLI 契约测试：参数面锁定 + 未落地命令不伪造结果 + scan 通路。"""
 
-import sys
+import json
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from opslens import exit_codes  # noqa: E402
-from opslens.cli import build_parser, main  # noqa: E402
+from opslens.cli import IMPLEMENTED_COMMANDS, build_parser, main  # noqa: E402
 
 EXPECTED_COMMANDS = ("scan", "aggregate", "attribute", "report", "bench")
 
@@ -28,6 +29,10 @@ def test_every_command_has_help_text():
     subs = _subparsers(build_parser())
     for name in EXPECTED_COMMANDS:
         assert subs[name].description or subs[name].format_help().strip()
+
+
+def test_scan_is_the_only_implemented_command_for_now():
+    assert IMPLEMENTED_COMMANDS == ("scan",)
 
 
 def test_scan_accepts_home_flag():
@@ -72,18 +77,68 @@ def test_no_command_prints_help_and_returns_usage_code(capsys):
     assert "usage" in captured.out.lower() or "用法" in captured.out
 
 
-def test_skeleton_does_not_fake_results(capsys, rules_dir):
-    """骨架期：命令明确报"阶段未就绪"（exit 3），不产出空结果。"""
+def test_unimplemented_command_does_not_fake_results(capsys, rules_dir):
+    """未落地命令：明确报"本构建尚未包含"，**绝不产出空结果**。
+
+    骨架期这里给的是退出码 3（阶段未就绪）；该语义已随 M2 退役，
+    现按"该命令在本构建里不可用"= 用法错误（2）处理。
+    """
     code = main(["attribute", "--events", "nope.json", "--rules-dir", rules_dir])
     captured = capsys.readouterr()
-    assert code == exit_codes.EXIT_NOT_READY
-    assert "尚未实现" in captured.err
+    assert code == exit_codes.EXIT_USAGE
+    assert "尚未包含" in captured.err
 
 
 def test_missing_rules_dir_is_data_unavailable(tmp_home, capsys):
-    """规则包缺失 → exit 4，而不是被"未就绪"掩盖。"""
+    """规则包缺失 → exit 4，而不是被"未实现"掩盖。"""
     missing = os.path.join(tmp_home, "no-such-rules")
     code = main(["scan", "--home", tmp_home, "--rules-dir", missing])
     captured = capsys.readouterr()
     assert code == exit_codes.EXIT_DATA_UNAVAILABLE
     assert "规则" in captured.err
+
+
+def test_scan_on_empty_home_is_data_unavailable(tmp_home, rules_dir, capsys):
+    """空数据源 → exit 4（不是 0，也不是静默空报告）。"""
+    code = main(["scan", "--home", tmp_home, "--rules-dir", rules_dir])
+    captured = capsys.readouterr()
+    assert code == exit_codes.EXIT_DATA_UNAVAILABLE
+    assert "没有可解析" in captured.err
+
+
+def test_scan_writes_events_and_reports_counts(synthetic_home, rules_dir, tmp_out, capsys):
+    out = os.path.join(tmp_out, "events.json")
+    code = main(["scan", "--home", synthetic_home, "--out", out, "--rules-dir", rules_dir])
+    captured = capsys.readouterr()
+    assert code == exit_codes.EXIT_OK
+    assert os.path.isfile(out)
+    assert "解析完成" in captured.out
+
+    with open(out, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    assert payload["schema"] == "opslens.events/1"
+    assert payload["count"] == len(payload["events"])
+    assert payload["count"] > 0
+    # 三态在产物里可见（"未声明"不得看起来像"没问题"）
+    statuses = set(item["status"] for item in payload["events"])
+    assert statuses == {"ok", "error", "unknown"}
+
+
+def test_scan_without_out_still_succeeds(synthetic_home, rules_dir, capsys):
+    code = main(["scan", "--home", synthetic_home, "--rules-dir", rules_dir])
+    captured = capsys.readouterr()
+    assert code == exit_codes.EXIT_OK
+    assert "解析完成" in captured.out
+
+
+def test_scan_unknown_version_reports_exit_4(tmp_home, rules_dir, capsys):
+    """喂未知版本号 → exit 4 + 报错含检测键路径（可演示物）。"""
+    directory = os.path.join(tmp_home, ".claude", "projects", "p")
+    os.makedirs(directory)
+    with open(os.path.join(directory, "s.jsonl"), "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps({"type": "system", "version": "9.9.999", "session_id": "s"}) + "\n")
+    code = main(["scan", "--home", tmp_home, "--rules-dir", rules_dir])
+    captured = capsys.readouterr()
+    assert code == exit_codes.EXIT_DATA_UNAVAILABLE
+    assert "9.9.999" in captured.err
+    assert "version" in captured.err

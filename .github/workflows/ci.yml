@@ -46,3 +46,25 @@ jobs:
           python -m opslens scan --home . --rules-dir ./no-such-rules
           code=$?
           test "$code" = "4" || { echo "expected exit 4, got $code"; exit 1; }
+
+      - name: Smoke scan on synthetic data (writes IR, exit 0)
+        shell: bash
+        run: |
+          set +e
+          python -m opslens scan --home data/synthetic --out ci-events.json
+          code=$?
+          test "$code" = "0" || { echo "expected exit 0, got $code"; exit 1; }
+          test -f ci-events.json || { echo "events file not written"; exit 1; }
+
+      - name: Smoke unknown schema version -> exit 4
+        shell: bash
+        run: |
+          set -e
+          mkdir -p ci-future/.claude/projects/p
+          printf '%s\n' '{"type":"system","version":"9.9.999","session_id":"s"}' > ci-future/.claude/projects/p/s.jsonl
+          set +e
+          python -m opslens scan --home ci-future --rules-dir data/rules 2> ci-future-err.txt
+          code=$?
+          set -e
+          test "$code" = "4" || { echo "expected exit 4, got $code"; exit 1; }
+          grep -q "9.9.999" ci-future-err.txt || { echo "error message must name the unknown version"; exit 1; }

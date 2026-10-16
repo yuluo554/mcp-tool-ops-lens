@@ -93,7 +93,19 @@
 - **token 粒度 = 每条 assistant 消息级**：`message.usage`（键集含 `input_tokens` / `output_tokens` / `cache_creation_input_tokens` / `cache_read_input_tokens` / `service_tier` 等）。实测**携带 `tool_use` 的 613 条 assistant 消息，613 条都带 `usage`** → **覆盖率 100%**，且 `tool_use` 与 assistant 消息**实测 1:1**（1105 条消息，每消息恰 1 个 `tool_use`）。
 - **口径推论（重要）**：token 是**在 assistant 消息上**、不在工具结果上——即"该次工具调用**所在轮次**的 token 开销"，**不是工具自身耗时消耗的 token**。故模块 2/4 的一切 token 表述必须以"**归属调用轮次**"为准，报告中不得写成"该工具消耗了 N token"（**这是"数值口径不一致 = 直接比就是造假结论"家族的实例**）。
 - **`input_tokens` 与缓存分开记**：`cache_read_input_tokens` / `cache_creation_input_tokens` 单列，**不并入** `input_tokens` 做"总开销"（否则按轮次累加会重复计数）。
-- **单次调用耗时：日志内不可得**。Claude jsonl 顶层**无** `duration*` 字段（全抽样只见 `system.durationMs` 共 6 条，非工具耗时）。可用耗时字段仅在 `~/.claude.json` 的项目级 **`lastToolDuration`（毫秒，整数；本机实测 4361 / 88811 / 107212）**——**只是"最后一次工具的耗时"，非按工具聚合**。→ 模块 2 的"平均耗时"**首期按"不可得"处理**（报告显式标注样本不可得），**不得用 lastToolDuration 冒充按工具耗时**；该字段只作项目级参考项单列。
+- **单次调用耗时：MCP 工具不可得；少数内置工具有部分覆盖（2026-10-16 M2 复核实测）**。
+  - 复核起因：M1 结构探测曾发现顶层 `toolUseResult` 键集里出现 `durationMs`，与本口径可能冲突，故在 M2 用只读探针对 **94 个 jsonl 全量**复测。
+  - 实测结论：`toolUseResult.durationMs` **确实存在**（**159 条**，均为 `int` 毫秒），但**覆盖是工具类型相关的**——
+    只有 `Glob`（112/121 次调用，**92.6%**）与 `WebFetch`（47/48，**97.9%**）带该字段；
+    `Bash`（711 次）、`Read`（512）、`PowerShell`（328）、`Edit`（252）、`Grep`（181）、`Write`（116）、
+    `WebSearch`（48）以及**全部 `mcp__*` 工具（含 `mcp__<server>__*`）一律 0 覆盖**。
+  - 由此固化：**Claude 侧 `duration_ms` 首期一律记 `None`**（IR 口径不变）。理由有两条，都可指认：
+    ① **对本项目主体（MCP 工具）覆盖率为 0**——即使解析该字段，模块 2 的 `duration_avg_ms` 对 MCP 维度仍是空集；
+    ② 该字段只覆盖 2 个内置工具，且日志本身无法证明它度量的是"工具自身执行耗时"还是含排队/UI 等待，
+    **语义未经核对**（与 `is_error` 三态同源的纪律：未核对字段不进计算路径）。
+  - **仍然成立的原判据**：`lastToolDuration`（`~/.claude.json` 项目级，"最后一次"值）**绝不冒充按工具耗时**。
+  - 未覆盖/不承诺项不变：Claude 按工具耗时（MCP 维度）首期不声明。
+- **可用耗时字段仅在 `~/.claude.json` 的项目级 `lastToolDuration`（毫秒，整数；本机实测 4361 / 88811 / 107212）**——**只是"最后一次工具的耗时"，非按工具聚合**。→ 模块 2 的"平均耗时"**首期按"不可得"处理**（报告显式标注样本不可得），**不得用 lastToolDuration 冒充按工具耗时**；该字段只作项目级参考项单列。
 
 ### C. `~/.claude/settings.json`：白名单键位 + **隐私红线（凭据在文件里）**
 
@@ -119,7 +131,7 @@
 | 成败 | Claude：**只认 `is_error is True` 为失败**，`False` 为成功，**缺失 = `unknown`**；Codex：`Exit code` 非 0 为失败，无该文本 = `unknown` | `unknown` 单列，**不进成功/失败分子分母** |
 | 工具标识 | Claude：`mcp__<server>__<tool>` 拆 server/tool；非 `mcp__` 前缀的内置工具 → `server=<builtin>` | Codex：原样记录工具名，**不套 Claude 前缀规则** |
 | token | Claude：`message.usage`，按**调用轮次**归属，缓存两项单列；Codex：**不按工具归因**（会话级另列） | 缺失 = `unknown` 并在报告标注样本量 |
-| 耗时 | Claude：**按工具不可得**（只项目级 `lastToolDuration` 作参考）；Codex：`Wall time` 文本 | 不可得 = 显式标注，**不代入均值** |
+| 耗时 | Claude：**按工具不可得**（MCP 维度覆盖率实测 0；`toolUseResult.durationMs` 仅覆盖 `Glob`/`WebFetch` 两个内置工具，语义未核对故不采用；项目级 `lastToolDuration` 只作参考）；Codex：`Wall time` 文本 | 不可得 = 显式标注，**不代入均值** |
 | 重试 | 见第四节（短时间窗内同 server+同 tool 连续失败后再调用） | 窗口值进配置文件 |
 
 **未覆盖/不承诺项（如实登记）**：Codex 按工具 token、Claude 按工具耗时、`is_error` 缺失态的真值（本机无法证伪"缺失=成功"的残余可能，故一律 `unknown` 而非二分）。

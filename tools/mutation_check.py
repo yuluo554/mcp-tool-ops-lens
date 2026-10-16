@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 五项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 六项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -572,6 +572,18 @@ def main():
         "发布打包器时间戳非固定（两跑哈希漂移）",
     )
     results.append(_report("发布打包器时间戳非固定（两跑哈希漂移）", code, out))
+
+    # 42.（M6 新增）发布打包器无 git 兜底失效：把"退回文件系统遍历"改成"直接崩" → 守门必红
+    #     真实故障形态：源码 zip 解压树（无 .git）里打包器 SystemExit（发布物本体复核二次抓出，
+    #     与变异项 40 同族——两个入仓工具都栽在"硬依赖 git"上）。
+    code, out = _mutate(
+        pkg_py,
+        '    names = []\n    for dirpath, dirnames, filenames in os.walk(_REPO):',
+        '    raise SystemExit("[package] git 取文件清单失败")\n    names = []\n    for dirpath, dirnames, filenames in os.walk(_REPO):',
+        ["tests/test_privacy.py::test_desensitize_auditor_selftest_and_tracked_scan_are_clean"],
+        "发布打包器无 git 兜底失效（导出树里直接崩）",
+    )
+    results.append(_report("发布打包器无 git 兜底失效（导出树里直接崩）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

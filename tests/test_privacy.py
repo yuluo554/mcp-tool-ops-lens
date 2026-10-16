@@ -225,18 +225,36 @@ def test_desensitize_auditor_selftest_and_tracked_scan_are_clean():
     # ⑤ 发布打包器（tools/package_release.py）必须可跑且确定性：
     #    改 `--rev` 时曾因漏掉 `_top_prefix` 定义直接 NameError（发布期实测抓出）——
     #    守门按"两跑同字节"打在打包器上，防"发布工具本身坏了"。
+    #    另：打包器同样必须**无 git 兜底**（源码 zip 解压树无 .git）——发布物本体复核二次抓出。
     pkg = os.path.join(REPO_ROOT, "tools", "package_release.py")
     assert os.path.isfile(pkg)
     import subprocess
     import tempfile
+
+    def _run_packager(script, cwd, out):
+        env = dict(os.environ, PYTHONUTF8="1")
+        return subprocess.run([sys.executable, "-X", "utf8", script, "--out", out],
+                              cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
     with tempfile.TemporaryDirectory() as tmp:
         out1 = os.path.join(tmp, "a.zip")
         out2 = os.path.join(tmp, "b.zip")
-        env = dict(os.environ, PYTHONUTF8="1")
         for out in (out1, out2):
-            proc = subprocess.run([sys.executable, "-X", "utf8", pkg, "--out", out],
-                                  cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            proc = _run_packager(pkg, REPO_ROOT, out)
             assert proc.returncode == 0, "打包器退出 {0}：{1}".format(
                 proc.returncode, proc.stdout.decode("utf-8", "replace")[-500:])
         with open(out1, "rb") as h1, open(out2, "rb") as h2:
             assert h1.read() == h2.read(), "打包器两跑字节不一致（确定性被破坏）"
+
+        # 无 git 兜底：把**真实源码树**复制到无 .git 的临时目录再跑打包器（必须跑副本！
+        # 跑原路径时 `_REPO` 仍指向真仓库，兜底分支永远不执行 → 那是假门，变异不会红）。
+        # 用真实树（含 src/）而非最小 fixture：否则会因为缺 `src/opslens` 而报无关的 ImportError。
+        import shutil
+        nogit = os.path.join(tmp, "nogit")
+        shutil.copytree(REPO_ROOT, nogit,
+                        ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__", "dist", "*.egg-info"))
+        script = os.path.join(nogit, "tools", "package_release.py")
+        assert not os.path.isdir(os.path.join(nogit, ".git")), "临时树不得含 .git（否则兜底分支不执行）"
+        proc = _run_packager(script, nogit, os.path.join(tmp, "ng.zip"))
+        assert proc.returncode == 0, "打包器无 git 兜底失效：{0}".format(
+            proc.stdout.decode("utf-8", "replace")[-500:])

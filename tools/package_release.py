@@ -31,26 +31,43 @@ FIXED_DATE = (2026, 10, 16, 0, 0, 0)
 EXTERNAL_ATTR = 0o644 << 16
 
 
+_SKIP_DIRS = (".git", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".egg-info", "dist", "build")
+
+
+def _has_git():
+    return os.path.isdir(os.path.join(_REPO, ".git"))
+
+
 def _tracked_files(rev=None):
     """打包面清单：默认取工作树跟踪面；`rev` 给定则取该 rev 的树清单。
 
     用 `git ls-files` / `git ls-tree` 而非 `os.walk`：打包面 == 发布面由 git 背书，
     未跟踪的本地杂项（venv / egg-info / 草稿）天然排除。
+    **无 git 兜底**：导出树（git archive / 源码 zip 解压）没有 `.git`，此时退回文件系统遍历
+    （按特征剪掉 venv/缓存/构建目录，不按名字猜），使本工具在导出树里也能跑。
     """
-    if rev:
-        cmd = ["git", "-c", "core.quotepath=off", "ls-tree", "-r", "--name-only", rev]
-    else:
-        cmd = ["git", "-c", "core.quotepath=off", "ls-files"]
-    proc = subprocess.run(cmd, cwd=_REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if proc.returncode != 0:
-        raise SystemExit("[package] git 取文件清单失败：{0}".format(proc.stderr.decode("utf-8", "replace")))
-    names = [n for n in proc.stdout.decode("utf-8").splitlines() if n.strip()]
+    if _has_git():
+        cmd = (["git", "-c", "core.quotepath=off", "ls-tree", "-r", "--name-only", rev] if rev
+               else ["git", "-c", "core.quotepath=off", "ls-files"])
+        proc = subprocess.run(cmd, cwd=_REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if proc.returncode == 0:
+            names = [n for n in proc.stdout.decode("utf-8").splitlines() if n.strip()]
+            if names:
+                return sorted(names)
+    names = []
+    for dirpath, dirnames, filenames in os.walk(_REPO):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.endswith(".egg-info")]
+        if "pyvenv.cfg" in filenames:
+            continue
+        for name in sorted(filenames):
+            full = os.path.join(dirpath, name)
+            names.append(os.path.relpath(full, _REPO).replace(os.sep, "/"))
     return sorted(names)
 
 
 def _file_bytes(name, rev=None):
-    """取文件字节：`rev` 给定则从该 rev 的 blob 读（**保证附件与发布基线同字节**）。"""
-    if rev:
+    """取文件字节：`rev` 给定且**在 git 树内**则从该 rev 的 blob 读（保证附件与发布基线同字节）。"""
+    if rev and _has_git():
         proc = subprocess.run(["git", "cat-file", "-p", "{0}:{1}".format(rev, name)],
                               cwd=_REPO, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if proc.returncode != 0:

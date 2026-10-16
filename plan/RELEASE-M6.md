@@ -145,13 +145,24 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 
 **结论**：`gh release view --json assets,tagName,isDraft` → `isDraft=false`、`tagName=v0.1.0`、
 附件 `mcp-tool-ops-lens-0.1.0-src.zip` 在列。
+**tag 指向 = `git rev-list -n1 v0.1.0`（自指表述，不写死 sha——sha 会随补记提交过期）**；
+本文件的发布结果回写（§八）走发布后小提交，**不迁 tag**。
 
 **发布物本体复核（最终版，逐项实测）**：
 - `gh release download v0.1.0`（**在仓库目录内跑**）→ 真下载件存在（`ls -l` 看字节数为证）。
 - 解压到**中立目录**（仓库树外，无 `.git`）→ `pytest` **285 passed**；`opslens bench` **exit 0**；
-  `opslens scan` **exit 0**；`tools/audit_desensitize.py` **DESSENSITIZE_AUDIT_OK**（无 git 兜底生效）。
+  `opslens scan`/`aggregate` **exit 0**、`report` **exit 1**（检出建议移除，符合明示语义）；
+  `tools/audit_desensitize.py` **DESSENSITIZE_AUDIT_OK**；`tools/package_release.py` **exit 0**
+  （两个入仓工具的无 git 兜底均生效）。
 - **sha256 对账口径**：下载件 sha256 == `py -X utf8 tools/package_release.py --out <zip> --rev v0.1.0`
   重算值（同值同时写在 **Release notes**，不在 zip 内——避免自指）。
+- **tag ↔ 附件同源**：`git rev-list -n1 v0.1.0` 的树与 zip 内 76 个文件**逐字节相同**（`git cat-file` 逐文件比对，差异 0）。
+
+**本轮共经历 3 轮发布（如实留痕，含"动作先于修正发生"的瑕疵）**：
+① 首版发布 → 本体复核抓出审计器无 git 兜底（1 failed）；② 修复审计器后重建 → 本体复核又抓出
+**打包器同样无 git 兜底**（且守门本身是假门：跑原路径时 `_REPO` 仍指真仓库）；③ 修复打包器 +
+守门改"跑副本"后，附件与 tag 树逐字节同源、中立目录全绿。**每一轮都是"发布物本体复核"证伪里程碑自述
+的直接产物**——本机与 CI（都有 `.git`）**永远测不出**这类缺陷。
 
 **CI run 与 push/tag 事件按 `head_sha` 逐条配对（快照：**截至本文件所在提交**，不是终值）**：
 

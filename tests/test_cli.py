@@ -32,11 +32,10 @@ def test_every_command_has_help_text():
 
 
 def test_implemented_commands_track_the_built_modules():
-    """已落地子命令清单 = 当前已接通的模块面（M3：scan + aggregate + attribute）。"""
-    assert IMPLEMENTED_COMMANDS == ("scan", "aggregate", "attribute")
+    """已落地子命令清单 = 当前已接通的模块面（M4：scan + aggregate + attribute + bench）。"""
+    assert IMPLEMENTED_COMMANDS == ("scan", "aggregate", "attribute", "bench")
     # 未落地命令必须不在清单里（防"没做却被登记成已做"）
-    for name in ("report", "bench"):
-        assert name not in IMPLEMENTED_COMMANDS
+    assert "report" not in IMPLEMENTED_COMMANDS
 
 
 def test_scan_accepts_home_flag():

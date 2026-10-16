@@ -27,6 +27,7 @@ STDLIB_FROZEN = frozenset(
         "errno",
         "functools",
         "glob",
+        "hashlib",
         "html",
         "io",
         "itertools",

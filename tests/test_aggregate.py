@@ -350,10 +350,15 @@ def test_timestamp_conversion_is_leap_year_correct():
 #   · src/opslens/attribute.py —— 模块 3 的归因统计（若出现比率）
 #   · tools/gen_synthetic_logs.py —— 真值**期望值**推导，必须与引擎相互独立
 #     （让两者共用实现会让真值沦为"引擎自证"，K12 明禁）
+#   · src/opslens/bench.py —— **M4 新增**：基准算的是**解析质量指标**（precision / recall / F1），
+#     那是"一致性比率"，不是域口径（`failure_rate` / `turn_token_avg`）的第二份计算——
+#     域口径仍只在上面三处。基准若不配比率就无从表达"解析对账是否达精确一致"。
+#     落点只有 `_ratio()` 一处，且 F1 的分子分母都来自与真值的计数比对。
 DIV_ALLOWED_FILES = frozenset(
     [
         "src/opslens/aggregate.py",
         "src/opslens/attribute.py",
+        "src/opslens/bench.py",
         "tools/gen_synthetic_logs.py",
     ]
 )

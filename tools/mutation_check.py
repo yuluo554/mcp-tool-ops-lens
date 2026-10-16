@@ -359,6 +359,78 @@ def main():
     )
     results.append(_report("重试窗口判断恒真（窗口参数失效）", code, out))
 
+    # =======================================================================
+    # M4 变异项：真值基准（模块 5）守门
+    # =======================================================================
+    bench_py = os.path.join(_REPO, "src", "opslens", "bench.py")
+
+    # 25. 探活机制：把探活结果恒判为"已检出"（假门——弄坏了也不报）
+    code, out = _mutate(
+        bench_py,
+        "    detected = len(probe_outcome[\"diffs\"]) > 0",
+        "    detected = True",
+        ["tests/test_bench.py::test_all_probes_turn_red",
+         "tests/test_bench.py::test_probe_is_load_bearing_for_every_suite",
+         "tests/test_bench.py::test_probe_verdict_is_derived_from_rerunning_the_check"],
+        "探活结果恒判已检出（探活是假门）",
+    )
+    results.append(_report("探活结果恒判已检出（探活是假门）", code, out))
+
+    # 26. 未启用分支：把 not_enabled 恒判为 False（"未启用"冒充通过）
+    code, out = _mutate(
+        bench_py,
+        "        result[\"status\"] = STATUS_NOT_ENABLED\n        result[\"not_enabled\"] = True",
+        "        result[\"status\"] = STATUS_PASS\n        result[\"not_enabled\"] = False",
+        ["tests/test_bench.py::test_not_enabled_when_no_effective_rules",
+         "tests/test_bench.py::test_not_enabled_suite_is_not_counted_as_passed"],
+        "未启用套件冒充通过（空分母分支失效）",
+    )
+    results.append(_report("未启用套件冒充通过（空分母分支失效）", code, out))
+
+    # 27. 对账等式：把三态对账的比较改成恒真（引擎输出与真值不再真正比对）
+    code, out = _mutate(
+        bench_py,
+        "        for field in (\"calls_total\", \"calls_ok\", \"calls_error\", \"calls_unknown\"):\n            if row[field] != declared[field]:",
+        "        for field in (\"calls_total\", \"calls_ok\", \"calls_error\", \"calls_unknown\"):\n            if False:",
+        ["tests/test_bench.py::test_diffs_are_listed_item_by_item",
+         "tests/test_bench.py::test_probe_detector_actually_detects"],
+        "三态对账比较恒真（对账失效）",
+    )
+    results.append(_report("三态对账比较恒真（对账失效）", code, out))
+
+    # 28. `--only` 白名单：把未知名改成静默跑全部（未知名不再报用法错误）
+    code, out = _mutate(
+        bench_py,
+        "        suite = suite_by_id(only)\n        if suite is None:",
+        "        suite = suite_by_id(only)\n        if False:",
+        ["tests/test_bench.py::test_unknown_only_is_usage_error",
+         "tests/test_bench.py::test_unknown_only_via_cli_is_exit_2"],
+        "--only 未知名被静默放行（白名单失效）",
+    )
+    results.append(_report("--only 未知名被静默放行（白名单失效）", code, out))
+
+    # 29. 覆盖声明：把"非穷举"声明的检查摘掉（覆盖声明不再消费 manifest）
+    code, out = _mutate(
+        bench_py,
+        "    if \"非穷举\" not in declaration:",
+        "    if False:",
+        ["tests/test_bench.py::test_coverage_declaration_consumes_manifest",
+         "tests/test_bench.py::test_coverage_suite_flags_missing_non_exhaustive_declaration"],
+        "覆盖声明的非穷举检查被摘掉",
+    )
+    results.append(_report("覆盖声明的非穷举检查被摘掉", code, out))
+
+    # 30. 解析基线：把 F1 判定改成恒通过（基线假绿）
+    code, out = _mutate(
+        bench_py,
+        "    if f1 != 1.0:",
+        "    if False:",
+        ["tests/test_bench.py::test_parse_baseline_f1_drops_when_engine_is_wrong",
+         "tests/test_bench.py::test_parse_baseline_reports_no_diff_when_f1_is_one"],
+        "解析基线 F1 判定恒通过（基线假绿）",
+    )
+    results.append(_report("解析基线 F1 判定恒通过（基线假绿）", code, out))
+
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))
     return 0 if all(results) else 1

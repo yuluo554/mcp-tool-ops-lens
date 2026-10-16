@@ -33,6 +33,25 @@ jobs:
       - name: Synthetic artifacts are byte-identical (--check)
         run: python tools/gen_synthetic_logs.py --check
 
+      - name: Truth benchmark reconciles against implanted truth (exit 0)
+        shell: bash
+        run: |
+          set +e
+          python -m opslens bench
+          code=$?
+          test "$code" = "0" || { echo "expected exit 0, got $code"; exit 1; }
+
+      - name: Truth benchmark unknown suite -> exit 2
+        shell: bash
+        run: |
+          set +e
+          python -m opslens bench --only NOPE
+          code=$?
+          test "$code" = "2" || { echo "expected exit 2, got $code"; exit 1; }
+
+      - name: Milestone-close double baseline rerun (parse F1 + e2e)
+        run: python -m opslens bench --check
+
       - name: Smoke via module form
         run: python -m opslens --help
 

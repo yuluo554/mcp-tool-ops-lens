@@ -1,8 +1,9 @@
 """opslens 命令行入口：argparse + 退出码语义（plan/02 §六）。
 
 M2 起 `scan` 已接通解析层（模块 1）；M3 起 `aggregate` / `attribute` 接通聚合层与归因层
-（模块 2/3）。尚未落地的子命令（`report` / `bench`）**明确报"本构建尚未包含"并以用法码（2）
-退出**，绝不伪造空结果——骨架期的退出码 `3`（阶段未就绪）已随 M2 整项退役。
+（模块 2/3）；M4 起 `bench` 接通真值基准（模块 5）。尚未落地的子命令（`report`）
+**明确报"本构建尚未包含"并以用法码（2）退出**，绝不伪造空结果——
+骨架期的退出码 `3`（阶段未就绪）已随 M2 整项退役。
 
 用法：
     opslens scan      --home <目录> [--out events.json] [--rules-dir <目录>]
@@ -18,6 +19,7 @@ import sys
 
 from . import __version__
 from . import _encoding
+from . import bench as bench_module
 from . import exit_codes
 from . import pipeline
 from . import serialize
@@ -26,7 +28,7 @@ from .config import ConfigError, load_rules
 PROG = "opslens"
 
 # 已接通的子命令（其余为"本构建尚未包含"）
-IMPLEMENTED_COMMANDS = ("scan", "aggregate", "attribute")
+IMPLEMENTED_COMMANDS = ("scan", "aggregate", "attribute", "bench")
 
 # 需要规则包的子命令（口径参数以参数注入解析层/聚合层，保持两层纯函数）
 _RULES_COMMANDS = ("scan", "aggregate", "attribute", "report", "bench")
@@ -62,8 +64,11 @@ def build_parser():
     _add_rules_dir(report)
 
     bench = subparsers.add_parser("bench", help="真值基准：引擎输出 vs 植入真值对账")
-    bench.add_argument("--only", default=None, help="只跑指定套件")
-    bench.add_argument("--check", action="store_true", help="只校验冻结产物位级一致，不重跑")
+    bench.add_argument("--only", default=None, help="只跑指定套件（未知名 → 退出码 2）")
+    bench.add_argument("--check", action="store_true", help="只跑双基线套件（解析对账 + e2e 双跑）")
+    bench.add_argument("--data-dir", default=None, help="合成数据目录；缺省用 data/synthetic")
+    bench.add_argument("--home", default=None, help="扫描根目录；缺省与 --data-dir 相同")
+    bench.add_argument("--out", default=None, help="基准报告输出路径（JSON）")
     _add_rules_dir(bench)
 
     return parser
@@ -198,6 +203,66 @@ def _run_scan(args, rules):
     return exit_codes.EXIT_OK
 
 
+def _run_bench(args, rules):
+    """真值基准（模块 5）：对账 + 每套件探活。退出码 0 达标 / 1 未达标 / 2 未知名。"""
+    payload, code = bench_module.run_bench(
+        data_dir=args.data_dir,
+        home=args.home,
+        rules_dir=args.rules_dir,
+        only=args.only,
+        check_only=args.check,
+    )
+
+    if args.out:
+        serialize.write_json(args.out, payload)
+
+    totals = payload["totals"]
+    sys.stdout.write(
+        "[{0}] 基准完成：{1} 个套件（通过 {2} / 未达标 {3} / 未启用 {4}）/ 差异 {5} 条\n".format(
+            PROG,
+            totals["suites"],
+            totals["passed"],
+            totals["failed"],
+            totals["not_enabled"],
+            totals["diffs"],
+        )
+    )
+    for item in payload["suites"]:
+        probe = item["probe"]
+        probe_text = "n/a" if probe is None else ("变红" if probe["detected"] else "未变红（假门）")
+        sys.stdout.write(
+            "  - [{0}] {1}：{2}（差异 {3} / 探活 {4}）\n".format(
+                item["layer"], item["id"], item["status"], len(item["diffs"]), probe_text
+            )
+        )
+        for diff in item["diffs"]:
+            sys.stdout.write(
+                "      · {0} @ {1}：期望 {2} / 实际 {3}{4}\n".format(
+                    diff["dimension"],
+                    diff["key"],
+                    diff["expected"],
+                    diff["actual"],
+                    ("（{0}）".format(diff["note"])) if diff["note"] else "",
+                )
+            )
+        for note in item["notes"]:
+            sys.stdout.write("      · 说明：{0}\n".format(note))
+
+    if payload["verdict"] != bench_module.STATUS_PASS:
+        sys.stderr.write(
+            "[{0}] 基准未达标：{1} 个套件未通过，{2} 条差异逐条列于上方（exit 1）。\n".format(
+                PROG, totals["failed"] + totals["not_enabled"], totals["diffs"]
+            )
+        )
+    else:
+        sys.stdout.write(
+            "[{0}] 基准达标：全部套件对账一致，且全部探活变红（可证伪）。\n".format(PROG)
+        )
+    if args.out:
+        sys.stdout.write("  - 基准报告已写出：{0}\n".format(args.out))
+    return code
+
+
 def main(argv=None):
     _encoding.ensure_utf8_stdio()
     parser = build_parser()
@@ -218,6 +283,8 @@ def main(argv=None):
             return _run_aggregate(args, rules)
         if args.command == "attribute":
             return _run_attribute(args, rules)
+        if args.command == "bench":
+            return _run_bench(args, rules)
         return _not_in_this_build(args.command)
     except ConfigError as exc:
         sys.stderr.write("[{0}] 规则包错误：{1}\n".format(PROG, exc))

@@ -5,9 +5,9 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层、M3 聚合归因已完成；M4–M6 见 `plan/05-里程碑.md`）。
-> 当前可用的子命令：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）；
-> `report` / `bench` 尚未落地，调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
+> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层、M3 聚合归因、M4 真值基准已完成；M5–M6 见 `plan/05-里程碑.md`）。
+> 当前可用的子命令：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）、`bench`（真值基准对账）；
+> `report` 尚未落地，调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
 >
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
@@ -45,20 +45,24 @@ opslens attribute --events events.json --out attr.json
 # 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）—— M5
 opslens report --events events.json --out examples/
 
-# 5) 真值基准对账（引擎输出 vs 合成日志植入的真值）—— M4
+# 5) 真值基准对账（引擎输出 vs 合成日志植入的真值）—— M4 已可用
 opslens bench
+
+# 5b) 只跑双基线（解析对账 F1 + e2e 双跑逐字节一致），里程碑收尾复跑
+opslens bench --check
 ```
 
-> 尚未落地的子命令（`report` / `bench`）会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
+> 尚未落地的子命令（`report`）会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
 
 `python -m opslens <命令>` 与上面的 `opslens <命令>` 等价（两条通路都可用）。
 
 选项：
 - `--home <目录>`：数据源根目录，缺省为当前用户 home。**测试与演示请显式传临时目录**，避免误扫真实会话。
-- `--out <文件>`：`scan` / `aggregate` / `attribute` 的产物输出路径（JSON）；省略则只打印摘要。
+- `--out <文件>`：`scan` / `aggregate` / `attribute` / `bench` 的产物输出路径（JSON）；省略则只打印摘要。
 - `--events <文件>`：`scan` 产出的事件流 JSON（`aggregate` / `attribute` 的输入）。
 - `--rules-dir <目录>`：规则包目录，缺省 `data/rules/`。
-- `--only <套件>`：`bench` 只跑指定套件。
+- `--only <套件>`：`bench` 只跑指定套件（未知名 → 退出码 2）。
+- `--data-dir <目录>`：`bench` 的合成数据目录，缺省 `data/synthetic/`。
 
 ### 聚合与归因（M3）口径要点
 
@@ -74,8 +78,30 @@ opslens bench
 | 规则门控 | `status=="verified"` **且** `verified_samples` 非空才进计算路径；未生效规则落 `other` 并**列出原因** | `config.py` → `attribute.py` |
 | 匹配面 | **只在 `error_text` 上匹配**（宽模式会在成功记录的正常输出上误命中） | `attribute.py` |
 
-**口径唯一性守门**：AST 断言除法运算（`BinOp(Div)`）只出现在 `aggregate.py` / `attribute.py` / 真值生成器
-（生成器须与引擎独立，否则真值沦为"引擎自证"）——防报告层或 CLI 层出现第二份比率计算。
+**口径唯一性守门**：AST 断言除法运算（`BinOp(Div)`）只出现在 `aggregate.py` / `attribute.py` / `bench.py` / 真值生成器
+（生成器须与引擎独立，否则真值沦为"引擎自证"；基准算的是**解析质量指标** precision/recall/F1，不是域口径的第二份计算）——防报告层或 CLI 层出现第二份比率计算。
+
+### 真值基准（M4）
+
+`opslens bench` 拿 `data/synthetic/` 的**冻结合成数据**跑一遍引擎（解析 → 聚合 → 归因），
+把引擎输出与 `truth.json` 的**植入期望**逐维度对账，差异**逐条列出**（维度 / 键 / 期望 / 实际）：
+
+| 层 | 套件 | 对账什么 |
+|---|---|---|
+| 样本驱动 | `S-THREE-STATE` / `S-FAILURE-RATE` / `S-RETRY-COUNT` / `S-TOKEN` / `S-DURATION` / `S-TWO-LEVEL` | 三态计数、失败率与分子分母、重试、token 分列、耗时口径、两级维度 rollup |
+| 规则驱动 | `R-CATEGORY-DIST` / `R-RULE-GATE` / `R-MATCH-AUDIT` | 失败分类分布、规则生效门控、命中可审计 |
+| 覆盖声明 | `C-MANIFEST-COVERAGE` | 消费 `manifest.json` 的逐维度"总数/采样数"双登记 + 非穷举声明 |
+| 双基线 | `B-PARSE-RECONCILE` / `B-E2E-DETERMINISM` | 解析对账基线（计数级 F1 = 1）+ e2e 双跑逐字节一致 |
+
+三条纪律：
+
+- **观测由基准运行时实算**（K12）：引擎输出是**重新扫描 + 重新聚合 + 重新归因**得到的，
+  与 `truth.json` 无数据通路——真值只提供期望值（真值库出现 `observed_*` 字段会被守门判红）。
+- **每套件配可证伪探活**：把输入**故意弄坏**（如把 `is_error=True` 判成 `ok`、把未生效规则塞进计算路径），
+  同一套 check 必须报出差异。探活**未变红 = 该套件是假门**，基准自判未达标。
+- **"未启用"不冒充通过**：无生效规则 / 无失败样本等空分母情形 → 套件 `not_enabled=true` + notes + **退出码 1**。
+
+退出码：`0` 达标 / `1` 未达标（差异、未启用、或探活未变红）/ `2` 用法与未知名（如 `bench --only NOPE`）。
 
 ### 解析层（M2）已支持的范围
 

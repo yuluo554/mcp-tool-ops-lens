@@ -8,7 +8,7 @@
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
 > 状态：**✅ v0.1.0 已发布**（[Release](https://github.com/yuluo554/mcp-tool-ops-lens/releases/tag/v0.1.0) ·
-> CI 四矩阵绿）。六个里程碑（M0 计划与骨架 → M1 数据先行 → M2 解析层 → M3 聚合归因 → M4 真值基准 → M5 交付报告 → M6 脱敏发布）全部完成。
+> CI 四矩阵绿）。六个里程碑 M0–M6 全部完成；发布留档见 [`plan/RELEASE-M6.md`](plan/RELEASE-M6.md)。
 > 五个子命令**全部落地**：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）、`report`（删换建议报告 MD/HTML/JSON）、`bench`（真值基准对账）。
 >
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。

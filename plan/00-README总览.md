@@ -18,6 +18,9 @@
 | plan/HANDOFF-M3.md | 上一棒交接（M3 聚合归因） | ✅（2026-10-16） |
 | plan/HANDOFF-M4.md | 交接（M4 真值基准） | ✅（2026-10-16） |
 | plan/HANDOFF-M5.md | 下一棒交接（M5 交付报告） | ✅（2026-10-16） |
+| plan/HANDOFF-M6.md | 交接（M6 脱敏发布） | ✅（2026-10-16） |
+| plan/RELEASE-M6.md | **发布留档（M6：干净环境/脱敏/CI 对账/tag+Release/发布物复核/收尾清零）** | ✅（2026-10-16） |
+| plan/verify/README.md | **干净环境验证留档（裸 clone + 全新 venv 逐条退出码）** | ✅（2026-10-16） |
 | data/README.md | 依据查证、数据源可得性、**M1 字段语义实测结论**、口径纪律 | ✅ v1（2026-10-16） |
 | data/synthetic/ | **合成日志 + 植入真值 + 覆盖度 manifest**（生成器产出，随包入仓） | ✅ M1（2026-10-16） |
 | src/opslens/parsers/ | **三解析器 + 版本检测 + 发现逻辑**（纯函数，无规则包/时钟/写盘） | ✅ M2（2026-10-16） |
@@ -63,7 +66,7 @@
 |---|---|---|---|---|
 | 痛点锚点（16k tokens 原话） | HN id 47822779 | README 引用 | 链接可直连复核 | ✅ |
 | 失败率量化锚点（4.12%） | BenjisCollector/agent-failure-study 自述 | README 引用（标注引用自述） | 仓库可访问复核 | ✅ |
-| 开源空白论据 | gh api 7 条检索式（见 data/README.md） | data/README 留档 | 按检索式复跑 | ⬜ 软论据 |
+| 开源空白论据 | gh api 7 条检索式（见 data/README.md） | data/README 留档 | 按检索式复跑 | ✅ 发布日复跑（结论未过期，见 RELEASE-M6 §九） |
 | 数据底座：Claude Code 日志/配置 | ~/.claude.json（66KB）等本机实测 | 运行时读取用户本机，不随包 | ✅ 路径可得 + **字段语义已核对**（data/README §五） |
 | 数据底座：Codex rollout | ~/.codex/sessions/YYYY/MM/DD/*.jsonl 本机实测 | 同上 | ✅ 路径可得 + **字段语义已核对**（含"按工具 token 不可得"结论） |
 | 真值基准 | 合成日志 + 程序化植入真值 | 随包 data/ 白名单入仓 | 基准对账报告 | ✅ **已落地**（M4：12 套件 / 全维度一致 / 每套件可证伪探活） |
@@ -79,7 +82,7 @@
 | M3 聚合归因 | 按 server/tool 聚合（调用/失败/重试/耗时/token）+ 规则匹配失败分类 | 口径一处定义，聚合结果确定性可复现 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
 | M4 基准 | 真值基准套件对账，覆盖度口径入 manifest | 对账报告可复跑 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
 | M5 交付 | HTML/Markdown 报告 + 示例报告 + README | 交付物纯本地可达，示例基于合成数据 | ✅ **2026-10-16 完成**（本地等价校验；未接远端，CI 待首推验证） |
-| M6 发布 | 发布 GitHub 公开仓库 | **三件套：git tag + GitHub Release（附产物，本地留副本 sha256 留档可复验）+ 发布留档 plan/RELEASE-M6.md**；缺任一项即为未达成 | ⬜ |
+| M6 发布 | 发布 GitHub 公开仓库 | **三件套：git tag + GitHub Release（附产物，本地留副本 sha256 留档可复验）+ 发布留档 plan/RELEASE-M6.md**；缺任一项即为未达成 | ✅ **2026-10-16 完成**（公开仓 + tag v0.1.0 + Release 附源码 zip；CI 四矩阵绿） |
 
 ## 诚实口径尾注（skill 硬约束）
 

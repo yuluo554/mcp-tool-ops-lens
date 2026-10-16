@@ -153,3 +153,49 @@ def test_forbidden_word_detector_actually_detects():
     assert "mcp__time__" in _real_server_hits("tool name mcp__time__get_current_time")
     # 反向自证：正常文本里的 time 不误伤（否则假红会让守门被关掉）
     assert _real_server_hits("Wall time: 0.5 seconds / Exit code: 124") == []
+
+
+# ---------------------------------------------------------------------------
+# M6 脱敏审计器随全量测试常驻（并入本文件，函数个数不变 → 收集数不变）
+# ---------------------------------------------------------------------------
+
+def _audit_module():
+    import importlib.util
+    path = os.path.join(REPO_ROOT, "tools", "audit_desensitize.py")
+    spec = importlib.util.spec_from_file_location("opslens_audit_desensitize", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_desensitize_auditor_selftest_and_tracked_scan_are_clean():
+    """脱敏审计器（M6 固化形态）的机制自证 + 跟踪面扫描必须全过。
+
+    并入本测试函数（非新增函数）以保持收集数不变；覆盖：
+    ① 阳性对照（四类模式必须命中）与阴性对照（noreply/传输地址不误报）；
+    ② 跟踪文件名 + 文本内容 + 二进制样例三层扫描 0 硬门命中，且扫描面非空。
+    历史层（第 4 步）不在此断言——CI 检出为浅克隆，历史扫描在彼处天然不完整，
+    由 tools/audit_desensitize.py 全量模式在完整 clone 下跑。
+    """
+    module = _audit_module()
+    module.selftest()  # 阳性/阴性对照（坏了会 AssertionError）
+    text_scanned, tracked_total, hits = module._scan_tracked_text()
+    assert tracked_total >= 40, "跟踪面过小（{0}），审计器可能空转".format(tracked_total)
+    assert text_scanned >= 40, "文本扫描面过小（{0}）".format(text_scanned)
+    _bin_scanned, bin_hits = module._scan_binary()
+    assert hits == [] and bin_hits == [], "脱敏审计硬门命中：{0}".format(hits + bin_hits)
+
+    # ③ CI 的 checkout 必须取全量历史（fetch-depth: 0）——否则审计器第 4 步在 CI 里
+    #    静默削弱成空验（浅克隆只见 1 提交）。守门打在 workflow 文本上，防"CI 也跑了历史扫描"是假的。
+    workflow = os.path.join(REPO_ROOT, ".github", "workflows", "ci.yml")
+    with open(workflow, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    checkout_lines = [i for i, ln in enumerate(lines) if "actions/checkout@" in ln]
+    assert checkout_lines, "ci.yml 未找到 checkout 步骤（扫描面为空）"
+    step_starts = [i for i, ln in enumerate(lines) if ln.startswith("      - ")]
+    for i in checkout_lines:
+        end = min([s for s in step_starts if s > i] or [len(lines)])
+        window = "\n".join(lines[i:end])
+        assert "fetch-depth: 0" in window, (
+            "ci.yml 的 checkout 未配 fetch-depth: 0（浅克隆会让脱敏审计的历史扫描空验）"
+        )

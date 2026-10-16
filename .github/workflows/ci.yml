@@ -17,6 +17,10 @@ jobs:
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 脱敏审计器第 4 步是**全历史**扫描：浅克隆（默认 fetch-depth: 1）下只见 1 个提交
+          # → 历史面无法成立（审计器会以 exit 2 明确报"浅克隆"而非静默空扫）。
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -29,6 +33,9 @@ jobs:
 
       - name: Test suite
         run: python -m pytest -q
+
+      - name: Desensitization audit (4-step + artifact scan)
+        run: python tools/audit_desensitize.py
 
       - name: Synthetic artifacts are byte-identical (--check)
         run: python tools/gen_synthetic_logs.py --check

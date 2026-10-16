@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 一项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 三项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -524,6 +524,29 @@ def main():
         "CI report 步骤摘掉 set +e（契约退出码 1 处提前中断）",
     )
     results.append(_report("CI report 步骤摘掉 set +e（契约退出码 1 处提前中断）", code, out))
+
+    # 38.（M6 新增）脱敏审计器：把内容扫描改成恒不命中 → 守门必红
+    #     真实故障形态：扫描面写错 / 模式失效 → 永远报 PASS（"静默空扫比不扫更坏"）。
+    audit_py = os.path.join(_HERE, "audit_desensitize.py")
+    code, out = _mutate(
+        audit_py,
+        '    "personal_path_win": re.compile("[A-Za-z]:" + _SEP_RE + "Users" + _SEP_RE),',
+        '    "personal_path_win": re.compile("(?!)"),',
+        ["tests/test_privacy.py::test_desensitize_auditor_selftest_and_tracked_scan_are_clean"],
+        "脱敏审计器内容模式失效（扫描恒不命中）",
+    )
+    results.append(_report("脱敏审计器内容模式失效（扫描恒不命中）", code, out))
+
+    # 39.（M6 新增）CI checkout 摘掉 fetch-depth: 0 → 历史扫描守门必红
+    #     真实故障形态：浅克隆下脱敏审计第 4 步只见 1 提交，"CI 也跑了历史扫描"变成假话。
+    code, out = _mutate(
+        ci_yml,
+        "          fetch-depth: 0\n",
+        "",
+        ["tests/test_privacy.py::test_desensitize_auditor_selftest_and_tracked_scan_are_clean"],
+        "CI checkout 摘掉 fetch-depth（历史扫描空验）",
+    )
+    results.append(_report("CI checkout 摘掉 fetch-depth（历史扫描空验）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

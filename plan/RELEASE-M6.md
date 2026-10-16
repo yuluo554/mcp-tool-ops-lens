@@ -86,8 +86,9 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 
 - **授权**：tag + Release 属外向且不可逆动作，`plan/05 §M6` 与 `HANDOFF-M6` 均标"经用户确认"。
   本轮以 AskUserQuestion 一次性确认（含 release notes 草案 preview），**用户明确选择"确认按方案发布"**。
-- **tag 指向**：含本记录完整内容的终态提交（**自指表述**，不写死 sha——sha 会随补记提交过期）：
-  用 `git rev-list -n1 v0.1.0` 与发布当时 HEAD 核对相等即可。
+- **tag 指向**：发布物基线提交（含发布时的 RELEASE-M6 与 README 状态翻转）。**自指表述**（不写死 sha，
+  sha 会随补记提交过期）：`git rev-list -n1 v0.1.0`。**发布结果性回写**（§八的 run id / 附件 sha256 终值 /
+  本体复核结论）走**发布后小提交**推送并等 CI 复绿，**不迁 tag**——这类内容天然需要发布结果才能写。
 - **Release 附件**：`mcp-tool-ops-lens-0.1.0-src.zip`（ASCII 名，跨平台解压友好、避开 gh CLI 剥中文名）。
 - **release notes**：用 `--notes-file` 传文件（markdown 表格/换行安全），内容 = 亮点清单 + 安装 + 评测数值 +
   依赖 + 边界 + 免责声明。
@@ -139,7 +140,28 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 
 **结论**：`gh release view --json assets,tagName,isDraft` → `isDraft=false`、`tagName=v0.1.0`、
 附件 `mcp-tool-ops-lens-0.1.0-src.zip`（sha256 `b91c38f9…`）在列。
-`gh run list` 与 push/tag 事件按 `head_sha` 逐条配对见 §四（tag push 实测**会**触发独立一轮 run）。
+
+**发布物本体复核（最终版，逐项实测）**：
+- `gh release download v0.1.0`（**在仓库目录内跑**）→ 下载件 sha256 = `b91c38f9…`，与 §六留档值**逐位一致**。
+- 解压到**中立目录**（仓库树外，无 `.git`）→ `pytest` **285 passed**；`opslens bench` **exit 0**；
+  `opslens scan` **exit 0**；`tools/audit_desensitize.py` **DESSENSITIZE_AUDIT_OK**（无 git 兜底生效）。
+
+**CI run 与 push/tag 事件按 `head_sha` 逐条配对（快照：截至 `33abe1c8`）**：
+
+| run id | event | head_branch | head_sha | 结果 | 说明 |
+|---|---|---|---|---|---|
+| 38913530971 | push | main | `96418426` | failure | 首跑（CI 步骤接线缺陷，见 §四） |
+| 38914466872 | push | main | `c7318d51` | success | 修复 set +e 后 |
+| 38916161455 | push | main | `dcb7ff8e` | success | 增脱敏审计 + fetch-depth:0 |
+| 38917428674 | push | main | `9a99ab63` | success | 终态回写（首次发布基线） |
+| 38917679491 | push | **v0.1.0** | `9a99ab63` | success | 首次 tag push（**实测 tag push 会触发独立一轮**） |
+| 38919033493 | push | main | `2c4b9f6d` | success | 审计器无 git 兜底修复 |
+| 38919512573 | push | main | `33abe1c8` | success | 发布留档终稿 |
+| 38919874423 | push | **v0.1.0** | `33abe1c8` | success | 迁移后 tag push |
+
+- **同 sha 双 run 的判别**：`9a99ab63` 与 `33abe1c8` 各有 main 与 v0.1.0 两条 run —— 靠 `event` + `head_branch` 区分。
+- **对账口径 = push 事件数**（非提交数）：截至 `33abe1c8`，main 收 6 次 push + tag 收 2 次 push = **8 个 run**
+  （`gh api …/actions/runs --jq '.total_count'` = 8）。**本文件所在提交及其后每次 push 各自还会再产生 1 个 run**。
 
 ## 九、缓议项与待核对项全表清零
 

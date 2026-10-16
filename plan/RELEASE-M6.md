@@ -97,11 +97,15 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 
 **打包这一步可复跑**（同源码树 → 同 zip 字节，**不**承诺 zip 内 exe 类产物可复现——本项目无 exe）：
 
-- 打包器 `tools/package_release.py`：打包面 = `git ls-files`（`core.quotepath=off` 防中文八进制转义）；
+- 打包器 `tools/package_release.py`：打包面 = `git ls-files`（工作树）或 `git ls-tree -r <rev>`（指定 rev，
+  发布时传 `--rev v0.1.0` 以**保证附件与 tag 树逐字节同源**）；`core.quotepath=off` 防中文八进制转义；
   `ZIP_STORED` + 条目按路径排序 + 全条目固定 `date_time`（发布基准日）+ 固定外部属性 0644。
 - **两跑逐字节一致**（实测 sha256 相同）。
-- 发布 zip sha256：`b91c38f9f0c7fd196f62347550c64aebe99352182616de8291f36c8c0ff5288d`（76 个跟踪文件）。
-  （首版 `62fd5159…` 因 §六 记录的缺陷已作废，见下。）
+- **发布 zip 的 sha256 不写在此处**（自指：zip 内含本文件，写入自身哈希会立刻过期且无法自洽）。
+  权威口径 = **重算规则**：
+  `py -X utf8 tools/package_release.py --out <zip> --rev v0.1.0` → 打印 sha256；
+  该值同时记在 **Release notes（不在 zip 内）** 与本仓发布后小提交的提交信息里。
+  核对方式：`git rev-list -n1 v0.1.0` 的树与 zip 内 76 个文件**逐字节同源**（用 `git cat-file` 比对）。
 
 **发布物本体复核**（与"冻结态/本机构建"是两回事——只验本机产物证明不了"下载回来的那份"）：
 
@@ -130,21 +134,24 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 
 **复核时序（如实留痕，含"动作先于修正发生"这一瑕疵）**：
 
-1. **首次发布**：tag v0.1.0 + `gh release create`（附件首版 `62fd5159…`）。
-2. **本体复核**：`gh release download` 真下载 → sha256 与首版留档**逐位一致**；解压到中立目录跑全量测试
-   → **1 failed**（审计器无 git 兜底，见 §六）。
-3. **修复 + 重建 + 迁移 tag**（零消费者窗口内）：修复提交 `2c4b9f6d` CI 绿 → 重建附件（新 sha256
-   `b91c38f9…`）→ 删除旧 tag/Release → 在新基线重打 tag + `gh release create`（`--verify-tag`）→
-   复验 `isDraft=false` + 附件在列 + 真下载 sha256 与**新留档值**逐位一致 + 中立目录复跑 285 passed。
-4. **本文件**随终态提交入仓（tag 所指 = 含本记录完整内容的提交）。
+1. **首次发布**：tag v0.1.0 + `gh release create`（附件首版）。
+2. **本体复核**：`gh release download` 真下载 → 解压到中立目录跑全量测试 → **1 failed**
+   （审计器无 git 兜底，见 §六）。
+3. **修复 + 重建 + 迁移 tag**（零消费者窗口内）：修复提交 CI 绿 → 删旧 tag/Release →
+   在含修复的终态提交重打 tag + `gh release create`（`--verify-tag`）→ 复验 `isDraft=false` +
+   附件在列 + 中立目录复跑 **285 passed**。
+4. **基线同源校验**：附件由 `--rev v0.1.0` 从 **tag 树**打包（不是工作树）→ zip 内 76 个文件与
+   tag 树**逐字节同源**（`git cat-file` 逐文件比对，差异 0）。
 
 **结论**：`gh release view --json assets,tagName,isDraft` → `isDraft=false`、`tagName=v0.1.0`、
-附件 `mcp-tool-ops-lens-0.1.0-src.zip`（sha256 `b91c38f9…`）在列。
+附件 `mcp-tool-ops-lens-0.1.0-src.zip` 在列。
 
 **发布物本体复核（最终版，逐项实测）**：
-- `gh release download v0.1.0`（**在仓库目录内跑**）→ 下载件 sha256 = `b91c38f9…`，与 §六留档值**逐位一致**。
+- `gh release download v0.1.0`（**在仓库目录内跑**）→ 真下载件存在（`ls -l` 看字节数为证）。
 - 解压到**中立目录**（仓库树外，无 `.git`）→ `pytest` **285 passed**；`opslens bench` **exit 0**；
   `opslens scan` **exit 0**；`tools/audit_desensitize.py` **DESSENSITIZE_AUDIT_OK**（无 git 兜底生效）。
+- **sha256 对账口径**：下载件 sha256 == `py -X utf8 tools/package_release.py --out <zip> --rev v0.1.0`
+  重算值（同值同时写在 **Release notes**，不在 zip 内——避免自指）。
 
 **CI run 与 push/tag 事件按 `head_sha` 逐条配对（快照：截至 `33abe1c8`）**：
 

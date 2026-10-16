@@ -5,7 +5,7 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**v0.1.0 开发中**（M0 计划与骨架已完成；五个模块的实现里程碑见 `plan/05-里程碑.md`）。
+> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行已完成；M2–M6 见 `plan/05-里程碑.md`）。
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
 ## 为什么需要它
@@ -80,6 +80,23 @@ opslens bench
 - **不修改用户配置**：纯只读分析 + 建议，不自动删改任何 MCP 配置。
 - **真实会话日志不入仓**：仓库内只含基于虚构 `fake-*` server 名的合成数据。
 - `~/.claude/settings.json` 的 `env` 块可能含凭据，解析器**只按显式键白名单读取，`env` 永不读取**。
+
+## 合成数据（基准输入，随包入仓）
+
+`data/synthetic/` 是**程序化生成**的合成日志与植入真值，用于真值基准对账（不依赖任何真实用户日志）：
+
+```bash
+# 重新生成（确定性：自研 splitmix64 + 固定 seed，无时钟、无 stdlib random）
+python tools/gen_synthetic_logs.py --out data/synthetic
+
+# 只校验冻结产物位级一致（CI 与本地守门都用它）
+python tools/gen_synthetic_logs.py --check
+```
+
+- `data/synthetic/logs/claude_alpha.jsonl` / `codex_alpha.jsonl`：Claude 形态与 Codex 形态的合成会话日志。
+- `data/synthetic/truth.json`：**只存输入与期望**（哪个 server 的失败率是多少、各失败模式多少条）；
+  观测值一律由基准运行时实算——真值库出现 `observed_*` 字段会被守门测试判红。
+- `data/synthetic/manifest.json`：覆盖度声明（server 失败率形态 / 失败模式 / 三态 / 阈值边界 / 反向样例逐项"总数-采样数"双登记）。
 
 ## 项目文档
 

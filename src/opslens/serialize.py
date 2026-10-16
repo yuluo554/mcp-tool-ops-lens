@@ -37,9 +37,24 @@ def write_atomic(path, text):
     return path
 
 
+def dumps_compact(obj):
+    """紧凑确定性 JSON（单行、无缩进）——供 JSONL 行使用。
+
+    JSONL 的每一行必须是单行 JSON，故不能复用带 indent 的 dumps()；
+    但排序/转义口径与 dumps() 一致（sort_keys + ensure_ascii=False）。
+    """
+    return json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
 def write_json(path, obj):
     """确定性 JSON 写盘。"""
     return write_atomic(path, dumps(obj))
+
+
+def write_jsonl(path, rows):
+    """确定性 JSONL 写盘：每行一个紧凑 JSON，LF 行尾，结尾 LF，原子替换。"""
+    text = "".join(dumps_compact(row) + "\n" for row in rows)
+    return write_atomic(path, text)
 
 
 def read_json(path):

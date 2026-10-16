@@ -123,3 +123,48 @@ def test_fully_qualified_rule_does_pass_both_gates(tmp_out):
     )
     rules = config.load_rules(tmp_out)
     assert [r["id"] for r in rules.effective_patterns()] == ["P-OK"]
+
+
+# ---------------------------------------------------------------------------
+# 合成覆盖度登记不得冒充"已核对样例"（防自证循环）
+# ---------------------------------------------------------------------------
+
+
+def test_synthetic_coverage_never_counts_as_verified_samples():
+    """F-REFUSE-1 只有合成覆盖度、没有真实样例 → 必须仍不生效。"""
+    rules = config.load_rules()
+    by_id = dict((r["id"], r) for r in rules.patterns["rules"])
+
+    refuse = by_id["F-REFUSE-1"]
+    assert refuse["synthetic_coverage"]["claude_servers"], "该规则应登记合成覆盖度（基准会演练）"
+    assert refuse["verified_samples"] == [], "合成植入不得被写成已核对样例"
+
+    assert "F-REFUSE-1" not in [r["id"] for r in rules.effective_patterns()]
+
+
+def test_synthetic_coverage_does_not_satisfy_the_samples_gate(tmp_out):
+    """只挂 synthetic_coverage（无 verified_samples）的规则必须被 samples 门拦住。"""
+    _write_pack(
+        tmp_out,
+        [
+            {
+                "id": "P-SYNTHETIC-ONLY",
+                "category": "content_refusal",
+                "status": "verified",
+                "patterns": ["boom"],
+                "verified_samples": [],
+                "synthetic_coverage": {"claude_servers": ["fake-low-fail"]},
+            }
+        ],
+    )
+    rules = config.load_rules(tmp_out)
+    assert rules.effective_patterns() == [], "合成覆盖度冒充了已核对样例"
+
+
+def test_every_effective_rule_has_real_samples_not_synthetic_only():
+    rules = config.load_rules()
+    for rule in rules.effective_patterns():
+        samples = rule.get("verified_samples") or []
+        assert samples, "{0} 无真实样例却生效".format(rule["id"])
+        for sample in samples:
+            assert "synthetic" not in sample.lower(), "{0} 的样例疑似来自合成植入".format(rule["id"])

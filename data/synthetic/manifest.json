@@ -1,0 +1,213 @@
+{
+  "coverage": [
+    {
+      "dimension": "server_failure_rate",
+      "items": [
+        {
+          "expected_failure_rate": 0.6,
+          "form": "high",
+          "sampled_calls": 40,
+          "server": "fake-high-fail"
+        },
+        {
+          "expected_failure_rate": 0.277778,
+          "form": "mid",
+          "sampled_calls": 40,
+          "server": "fake-mid-fail"
+        },
+        {
+          "expected_failure_rate": 0.041667,
+          "form": "low",
+          "sampled_calls": 24,
+          "server": "fake-low-fail"
+        },
+        {
+          "expected_failure_rate": 0.266667,
+          "form": "retry",
+          "sampled_calls": 30,
+          "server": "fake-retry"
+        }
+      ],
+      "required_forms": 4,
+      "sampled_forms": 4
+    },
+    {
+      "dimension": "failure_mode",
+      "items": [
+        {
+          "form": "timeout",
+          "sampled_calls": 24
+        },
+        {
+          "form": "permission_denied",
+          "sampled_calls": 25
+        },
+        {
+          "form": "invalid_args",
+          "sampled_calls": 22
+        },
+        {
+          "form": "content_refusal",
+          "sampled_calls": 1
+        }
+      ],
+      "required_forms": 4,
+      "sampled_forms": 4
+    },
+    {
+      "dimension": "three_state",
+      "items": [
+        {
+          "form": "ok",
+          "sampled_calls": 122
+        },
+        {
+          "form": "error",
+          "sampled_calls": 75
+        },
+        {
+          "form": "unknown",
+          "sampled_calls": 5
+        }
+      ],
+      "required_forms": 3,
+      "sampled_forms": 3
+    },
+    {
+      "dimension": "threshold_boundary",
+      "items": [
+        {
+          "form": "threshold_exact",
+          "server": "fake-threshold-exact"
+        },
+        {
+          "form": "near_miss",
+          "server": "fake-near-miss"
+        }
+      ],
+      "required_forms": 2,
+      "sampled_forms": 2
+    },
+    {
+      "dimension": "reverse_case",
+      "items": [
+        {
+          "form": "reverse",
+          "server": "fake-low-fail"
+        }
+      ],
+      "required_forms": 1,
+      "sampled_forms": 1
+    }
+  ],
+  "declaration": "抽样覆盖，非穷举：以下为最低覆盖项的登记，不代表真实世界的分布。",
+  "generator": "tools/gen_synthetic_logs.py",
+  "rules_pack": {
+    "effective_rules": 3,
+    "path": "data/rules",
+    "rules": [
+      {
+        "category": "timeout",
+        "effective": true,
+        "id": "F-TIMEOUT-1",
+        "status": "verified",
+        "verified_samples": 2
+      },
+      {
+        "category": "permission_denied",
+        "effective": true,
+        "id": "F-PERM-1",
+        "status": "verified",
+        "verified_samples": 2
+      },
+      {
+        "category": "invalid_args",
+        "effective": true,
+        "id": "F-ARGS-1",
+        "status": "verified",
+        "verified_samples": 3
+      },
+      {
+        "category": "content_refusal",
+        "effective": false,
+        "id": "F-REFUSE-1",
+        "status": "pending",
+        "verified_samples": 0
+      }
+    ],
+    "total_rules": 4
+  },
+  "seed": 20261016,
+  "servers": [
+    {
+      "calls_error": 24,
+      "calls_ok": 16,
+      "calls_total": 40,
+      "calls_unknown": 0,
+      "expected_failure_rate": 0.6,
+      "expected_suggestion": "remove_candidate",
+      "server": "fake-high-fail",
+      "shape": "high"
+    },
+    {
+      "calls_error": 10,
+      "calls_ok": 26,
+      "calls_total": 40,
+      "calls_unknown": 4,
+      "expected_failure_rate": 0.277778,
+      "expected_suggestion": "investigate",
+      "server": "fake-mid-fail",
+      "shape": "mid"
+    },
+    {
+      "calls_error": 1,
+      "calls_ok": 23,
+      "calls_total": 24,
+      "calls_unknown": 0,
+      "expected_failure_rate": 0.041667,
+      "expected_suggestion": "none",
+      "server": "fake-low-fail",
+      "shape": "low"
+    },
+    {
+      "calls_error": 8,
+      "calls_ok": 22,
+      "calls_total": 30,
+      "calls_unknown": 0,
+      "expected_failure_rate": 0.266667,
+      "expected_suggestion": "investigate",
+      "server": "fake-retry",
+      "shape": "retry"
+    },
+    {
+      "calls_error": 10,
+      "calls_ok": 10,
+      "calls_total": 20,
+      "calls_unknown": 0,
+      "expected_failure_rate": 0.5,
+      "expected_suggestion": "remove_candidate",
+      "server": "fake-threshold-exact",
+      "shape": "threshold_exact"
+    },
+    {
+      "calls_error": 19,
+      "calls_ok": 21,
+      "calls_total": 40,
+      "calls_unknown": 0,
+      "expected_failure_rate": 0.475,
+      "expected_suggestion": "investigate",
+      "server": "fake-near-miss",
+      "shape": "near_miss"
+    }
+  ],
+  "totals": {
+    "calls_total": 202,
+    "claude_calls": 194,
+    "codex_calls": 8,
+    "logs": [
+      "logs/claude_alpha.jsonl",
+      "logs/codex_alpha.jsonl"
+    ],
+    "servers_sampled": 6
+  }
+}

@@ -1,0 +1,199 @@
+{
+  "boundary_cases": [
+    {
+      "kind": "threshold_exact",
+      "note": "failure_rate 恰等于 remove_candidate.failure_rate_gte，期望命中（验 ≥ 语义）",
+      "server": "fake-threshold-exact"
+    },
+    {
+      "kind": "near_miss",
+      "note": "failure_rate 低于 remove_candidate.failure_rate_gte，期望不命中 remove_candidate",
+      "server": "fake-near-miss"
+    }
+  ],
+  "claude": {
+    "servers": [
+      {
+        "calls_error": 24,
+        "calls_ok": 16,
+        "calls_total": 40,
+        "calls_unknown": 0,
+        "expected_failure_rate": 0.6,
+        "expected_retry_count": 0,
+        "expected_suggestion": "remove_candidate",
+        "failure_modes": {
+          "invalid_args": {
+            "calls": 12,
+            "rule_effective": true,
+            "rule_id": "F-ARGS-1"
+          },
+          "timeout": {
+            "calls": 12,
+            "rule_effective": true,
+            "rule_id": "F-TIMEOUT-1"
+          }
+        },
+        "server": "fake-high-fail",
+        "shape": "high"
+      },
+      {
+        "calls_error": 10,
+        "calls_ok": 26,
+        "calls_total": 40,
+        "calls_unknown": 4,
+        "expected_failure_rate": 0.277778,
+        "expected_retry_count": 0,
+        "expected_suggestion": "investigate",
+        "failure_modes": {
+          "other": {
+            "calls": 1,
+            "rule_effective": false,
+            "rule_id": null
+          },
+          "permission_denied": {
+            "calls": 6,
+            "rule_effective": true,
+            "rule_id": "F-PERM-1"
+          },
+          "timeout": {
+            "calls": 3,
+            "rule_effective": true,
+            "rule_id": "F-TIMEOUT-1"
+          }
+        },
+        "server": "fake-mid-fail",
+        "shape": "mid"
+      },
+      {
+        "calls_error": 1,
+        "calls_ok": 23,
+        "calls_total": 24,
+        "calls_unknown": 0,
+        "expected_failure_rate": 0.041667,
+        "expected_retry_count": 0,
+        "expected_suggestion": "none",
+        "failure_modes": {
+          "content_refusal": {
+            "calls": 1,
+            "rule_effective": false,
+            "rule_id": "F-REFUSE-1"
+          }
+        },
+        "server": "fake-low-fail",
+        "shape": "low"
+      },
+      {
+        "calls_error": 8,
+        "calls_ok": 22,
+        "calls_total": 30,
+        "calls_unknown": 0,
+        "expected_failure_rate": 0.266667,
+        "expected_retry_count": 8,
+        "expected_suggestion": "investigate",
+        "failure_modes": {
+          "timeout": {
+            "calls": 8,
+            "rule_effective": true,
+            "rule_id": "F-TIMEOUT-1"
+          }
+        },
+        "server": "fake-retry",
+        "shape": "retry"
+      },
+      {
+        "calls_error": 10,
+        "calls_ok": 10,
+        "calls_total": 20,
+        "calls_unknown": 0,
+        "expected_failure_rate": 0.5,
+        "expected_retry_count": 0,
+        "expected_suggestion": "remove_candidate",
+        "failure_modes": {
+          "invalid_args": {
+            "calls": 10,
+            "rule_effective": true,
+            "rule_id": "F-ARGS-1"
+          }
+        },
+        "server": "fake-threshold-exact",
+        "shape": "threshold_exact"
+      },
+      {
+        "calls_error": 19,
+        "calls_ok": 21,
+        "calls_total": 40,
+        "calls_unknown": 0,
+        "expected_failure_rate": 0.475,
+        "expected_retry_count": 0,
+        "expected_suggestion": "investigate",
+        "failure_modes": {
+          "permission_denied": {
+            "calls": 19,
+            "rule_effective": true,
+            "rule_id": "F-PERM-1"
+          }
+        },
+        "server": "fake-near-miss",
+        "shape": "near_miss"
+      }
+    ]
+  },
+  "codex": {
+    "calls_error": 3,
+    "calls_ok": 4,
+    "calls_total": 8,
+    "calls_unknown": 1,
+    "expected_failure_rate": 0.428571,
+    "expected_suggestion": "low_signal",
+    "failure_modes": {
+      "other": {
+        "calls": 2,
+        "rule_effective": false,
+        "rule_id": null
+      },
+      "timeout": {
+        "calls": 1,
+        "rule_effective": true,
+        "rule_id": "F-TIMEOUT-1"
+      }
+    },
+    "server": "<codex>",
+    "session_id": "sess-codex-alpha",
+    "source_version": "0.146.0-alpha.3.1",
+    "token_attribution": "session_level_only"
+  },
+  "generator": "tools/gen_synthetic_logs.py",
+  "note": "真值库只存输入与期望；观测由基准运行时实算（K12）。",
+  "reverse_cases": [
+    {
+      "kind": "reverse",
+      "note": "低失败率 server，期望不出 remove_candidate（反向样例）",
+      "server": "fake-low-fail"
+    }
+  ],
+  "rules_snapshot": {
+    "investigate": {
+      "calls_total_gte": 20,
+      "description": "失败率居中且样本量足够 → 建议排查",
+      "failure_rate_gte": 0.2,
+      "failure_rate_lt": 0.5
+    },
+    "min_samples": {
+      "calls_total_gte": 20,
+      "description": "样本不足一律降级为\"数据不足\"，不出建议",
+      "token_samples_gte": 20
+    },
+    "rate_precision": 6,
+    "remove_candidate": {
+      "calls_total_gte": 20,
+      "description": "失败率不低于该值且样本量足够 → 建议移除",
+      "failure_rate_gte": 0.5
+    }
+  },
+  "seed": 20261016,
+  "three_state": {
+    "error": "tool_result.is_error=true",
+    "ok": "tool_result.is_error=false",
+    "unknown": "tool_result 无 is_error 键（含部分带错误文本的缺失样本）"
+  }
+}

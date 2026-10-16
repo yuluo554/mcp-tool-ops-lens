@@ -1,6 +1,6 @@
 {
-  "_note": "失败模式规则表（模块 3）。门控硬约束：status 必须为 verified 且 verified_samples 非空，规则才进计算路径；否则落 other 并在报告\"未生效规则\"节列出原因。verified_samples 一律来自 M1 阶段本机实测的错误文本（截取片段，不含本机绝对路径与个人信息）。",
-  "_version": 1,
+  "_note": "失败模式规则表（模块 3）。门控硬约束：status 必须为 verified 且 verified_samples 非空，规则才进计算路径；否则落 other 并在报告\"未生效规则\"节列出原因。verified_samples 一律来自 M1 阶段本机实测的错误文本（截取片段，不含本机绝对路径与个人信息）。synthetic_coverage 只登记\"哪条合成记录会演练该规则\"，属基准覆盖度登记，**绝不作为已核对样例**（合成植入自证循环）。",
+  "_version": 2,
   "_source": "data/README.md §五 A / §五 D（2026-10-16 本机实测）",
   "categories": [
     "timeout",
@@ -24,7 +24,12 @@
         "Exit code 143 / Command timed out after 10m 0s",
         "Codex rollout: Exit code: 124（超时惯例值，本机实测 2 条）"
       ],
-      "note": "本机实测：Claude 侧 1 条真实样例（tool_result.is_error=true）；Codex 侧 Exit code 124 为超时惯例值"
+      "synthetic_coverage": {
+        "claude_servers": ["fake-high-fail", "fake-retry"],
+        "codex_calls": ["exec Exit code: 124"],
+        "note": "合成记录只用于演练规则与对账，不计入 verified_samples"
+      },
+      "note": "本机实测：Claude 侧 1 条真实样例（tool_result.is_error=true）；Codex 侧 Exit code 124 为超时惯例值。注意 `\\bT?imeout...\\b` 为宽模式，本机实测会命中 `Timeout._onTimeout` 这类非超时文本，故只在失败记录（error_text）上匹配。"
     },
     {
       "id": "F-PERM-1",
@@ -41,6 +46,11 @@
         "PermissionError: [Errno 13] Permission denied: '<本机路径已省略>'",
         "failed with error: 0x80070005 / Access is denied."
       ],
+      "synthetic_coverage": {
+        "claude_servers": ["fake-mid-fail", "fake-near-miss"],
+        "codex_calls": [],
+        "note": "合成记录只用于演练规则与对账，不计入 verified_samples"
+      },
       "note": "本机实测 5 条真实样例（tool_result.is_error=true）"
     },
     {
@@ -63,7 +73,12 @@
         "AttributeError: module 'cairosvg' has no attribute 'svg2url'",
         "SyntaxError: EOL while scanning string literal"
       ],
-      "note": "本机实测 6 条真实样例（tool_result.is_error=true）"
+      "synthetic_coverage": {
+        "claude_servers": ["fake-high-fail", "fake-threshold-exact"],
+        "codex_calls": [],
+        "note": "合成记录只用于演练规则与对账，不计入 verified_samples"
+      },
+      "note": "本机实测 6 条真实样例（tool_result.is_error=true）。实测还发现同模式的文本会出现在 is_error=false 的记录里（如 `error: unexpected argument '-n' found` 出现在未标失败的输出中），故规则只在 error_text 上匹配，不得在成功记录上匹配。"
     },
     {
       "id": "F-REFUSE-1",
@@ -76,6 +91,11 @@
         "policy violation"
       ],
       "verified_samples": [],
+      "synthetic_coverage": {
+        "claude_servers": ["fake-low-fail"],
+        "codex_calls": [],
+        "note": "合成日志植入该类记录用于演练与对账，但**植入不能当已核对样例**（自证循环）"
+      },
       "note": "本机 94 个会话日志中 0 条匹配样例（2026-10-16 实测）→ 按纪律不生效、落 other。合成基准会植入该类记录，但该植入**不作为规则的已核对样例**（那是自证循环）；规则待真实样例出现后再转 verified"
     }
   ]

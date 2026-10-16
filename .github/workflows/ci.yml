@@ -30,6 +30,9 @@ jobs:
       - name: Test suite
         run: python -m pytest -q
 
+      - name: Synthetic artifacts are byte-identical (--check)
+        run: python tools/gen_synthetic_logs.py --check
+
       - name: Smoke via module form
         run: python -m opslens --help
 

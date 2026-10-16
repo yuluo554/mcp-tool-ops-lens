@@ -46,6 +46,19 @@
 3. **覆盖度口径**：基准套件按 server 维度（高失败率/中失败率/低失败率/正常重试型）与失败模式维度（超时/权限拒绝/参数错误/内容拒绝各至少覆盖）列最低覆盖项，写进 manifest；防偏科。
 4. **真实会话日志不入仓**：`.gitignore` 已排除；示例报告一律基于合成数据生成。
 
+### 三·补 M1 生成器实况（2026-10-16，与规格逐条对应）
+
+| 项 | 实况 |
+|---|---|
+| 入口 | `tools/gen_synthetic_logs.py`；`--out`（缺省 `data/synthetic`）、`--rules-dir`、`--check` |
+| 确定性 | 自研 **splitmix64**（`_GOLDEN_GAMMA = 0x9E3779B97F4A7C15`），固定 `seed = 20261016`；**无 stdlib `random` / 无时钟**（事件时间由"固定日期常量 + 整数偏移"推导，非时钟读数） |
+| 产物 | `logs/claude_alpha.jsonl`（394 行）/ `logs/codex_alpha.jsonl`（27 行）/ `truth.json` / `manifest.json` |
+| 位级一致 | `--check` 重生成逐字节比对；**跨进程 sha256 独立复核一致**（见 `plan/05 §M1` 出口门记录） |
+| 白名单 | server 一律 `fake-*`（6 个：`fake-high-fail` / `fake-mid-fail` / `fake-low-fail` / `fake-retry` / `fake-threshold-exact` / `fake-near-miss`）；tool 一律 `tool_*` |
+| 三态 | `is_error=true` / `=false` / **键缺失**三者都在日志里真实存在；缺失样本中另有 1 条**含错误文本**（对应本机实测 14.9% 形态） |
+| 真值字段 | 只存输入与期望（`calls_ok/error/unknown`、`expected_failure_rate`、`expected_suggestion`、`expected_retry_count`、`failure_modes`）；**无 `observed_*` / `engine_output`**（守门断言） |
+| 规则素材边界 | 规则表的 `verified_samples` **只来自本机实测**；合成植入登记在独立字段 `synthetic_coverage`，并有守门锁死"合成覆盖度 ≠ 已核对样例" |
+
 ## 四、数值口径纪律（一处定义）
 
 以下口径**仅在本节定义一次**，引擎、真值、报告与文档引用必须同源，不得在任何注记/代码注释里手写第二份表述：

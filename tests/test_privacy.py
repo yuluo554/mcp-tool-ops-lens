@@ -6,14 +6,29 @@
 
 import ast
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 本机真实 server 名：合成数据与仓内文件绝不允许出现（品牌/隐私隔离）
+# 本机真实 server 名（plan/04 §二）：合成数据与仓内文件绝不允许出现（品牌/隐私隔离）。
+# 分两类：① 辨识度高的名字按裸子串匹配；② 与常用英文词同形的名字
+# （fetch / memory / time）只在 `mcp__<name>__` 命名空间形态下匹配——
+# 否则 `\btime\b` 会命中 "Wall time:"、`timeout` 等正常文本，产生假红。
 REAL_SERVER_NAMES = ("windows-mcp", "desktop-commander", "codegraph", "officecli", "installed_plugins")
+REAL_SERVER_NAME_TOKENS = ("fetch", "memory", "time")
+
+
+def _real_server_hits(text):
+    """返回文本中命中的真实 server 名（两类匹配规则合一）。"""
+    hits = [name for name in REAL_SERVER_NAMES if name in text]
+    for token in REAL_SERVER_NAME_TOKENS:
+        if re.search(r"mcp__" + re.escape(token) + r"__", text):
+            hits.append("mcp__{0}__".format(token))
+    return hits
+
 
 # 本机实测含凭据的键名（只用于断言"未被读取"）
 CREDENTIAL_KEY = "ANTHROPIC_AUTH_TOKEN"
@@ -110,6 +125,7 @@ def test_no_credential_constant_appears_in_source():
 def test_real_server_names_absent_from_repo_content():
     """真实 server 名不得进入仓内文件（合成数据用 fake-* 白名单）。"""
     offenders = []
+    scanned = 0
     for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
         dirnames[:] = [d for d in dirnames if d not in (".git", "__pycache__", ".venv", ".pytest_cache")]
         for name in filenames:
@@ -124,7 +140,16 @@ def test_real_server_names_absent_from_repo_content():
                     text = handle.read()
             except (UnicodeDecodeError, OSError):
                 continue
-            for real in REAL_SERVER_NAMES:
-                if real in text:
-                    offenders.append("{0} <- {1}".format(rel, real))
+            scanned += 1
+            for hit in _real_server_hits(text):
+                offenders.append("{0} <- {1}".format(rel, hit))
+    assert scanned >= 20, "扫描面只有 {0} 个文件，守门可能空转".format(scanned)
     assert offenders == [], "真实 server 名泄漏：{0}".format(offenders)
+
+
+def test_forbidden_word_detector_actually_detects():
+    """探针自证：两类匹配都必须命中样例，否则守门是假门。"""
+    assert _real_server_hits("mcp__windows-mcp__PowerShell") == ["windows-mcp"]
+    assert "mcp__time__" in _real_server_hits("tool name mcp__time__get_current_time")
+    # 反向自证：正常文本里的 time 不误伤（否则假红会让守门被关掉）
+    assert _real_server_hits("Wall time: 0.5 seconds / Exit code: 124") == []

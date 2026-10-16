@@ -1,0 +1,25 @@
+{
+  "_note": "阈值表：全部建议触发阈值集中于此，代码内不得出现阈值字面量（零字面量门禁）。改动本文件即为调参，不需改代码。",
+  "_version": 1,
+  "remove_candidate": {
+    "failure_rate_gte": 0.5,
+    "calls_total_gte": 20,
+    "description": "失败率不低于该值且样本量足够 → 建议移除"
+  },
+  "investigate": {
+    "failure_rate_gte": 0.2,
+    "failure_rate_lt": 0.5,
+    "calls_total_gte": 20,
+    "description": "失败率居中且样本量足够 → 建议排查"
+  },
+  "cost_heavy": {
+    "turn_token_avg_gte": 20000,
+    "token_samples_gte": 20,
+    "description": "单次调用轮次 token 均值不低于该值且样本足够 → 开销大户"
+  },
+  "min_samples": {
+    "calls_total_gte": 20,
+    "token_samples_gte": 20,
+    "description": "样本不足一律降级为\"数据不足\"，不出建议"
+  }
+}

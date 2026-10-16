@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# 快照类（若将来登记 sha256）必须冻结字节，不走 EOL 归一
+# *.pdf binary
+# *.jsonl.gz binary

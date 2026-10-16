@@ -1,0 +1,14 @@
+{
+  "_note": "口径参数：重试识别窗口等。改这里即为改口径，必须同步 plan/03 与 data/README 的数值口径纪律节。",
+  "_version": 1,
+  "retry": {
+    "window_seconds": 120,
+    "description": "同 server + 同 tool 在窗口内失败后再次调用，记一次重试"
+  },
+  "error_text": {
+    "max_chars": 240,
+    "description": "错误文本进 IR/报告前截断上限，防 prompt 与代码正文外泄"
+  },
+  "rate_precision": 6,
+  "_rate_precision_note": "比率保留小数位，结果四舍五入到该精度后再比较，保证跨平台浮点一致"
+}

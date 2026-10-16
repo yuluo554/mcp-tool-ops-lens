@@ -1,0 +1,70 @@
+"""编码守卫测试。
+
+本机带 -X utf8 跑，证明不了子进程/CI/用户通道——故用 cp1252 桩复现非 UTF-8 环境。
+"""
+
+import io
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+
+from opslens import _encoding  # noqa: E402
+
+
+class _FakeStream(object):
+    """可重配的假流：记录是否被要求切 UTF-8。"""
+
+    def __init__(self, encoding, fail=False):
+        self.encoding = encoding
+        self.calls = []
+        self._fail = fail
+
+    def reconfigure(self, encoding=None, errors=None):
+        if self._fail:
+            raise ValueError("cannot reconfigure")
+        self.calls.append((encoding, errors))
+        self.encoding = encoding
+
+
+def test_reconfigures_non_utf8_streams():
+    out = _FakeStream("cp1252")
+    err = _FakeStream("ascii")
+    result = _encoding.ensure_utf8_stdio([out, err])
+    assert result == ["stdout", "stderr"]
+    assert out.encoding == "utf-8"
+    assert err.encoding == "utf-8"
+
+
+def test_leaves_utf8_streams_untouched():
+    out = _FakeStream("utf-8")
+    err = _FakeStream("UTF-8")
+    assert _encoding.ensure_utf8_stdio([out, err]) == []
+    assert out.calls == []
+
+
+def test_leaves_chinese_console_alone():
+    """cp936 控制台保持不动：重配可能破坏中文显示。"""
+    out = _FakeStream("cp936")
+    assert _encoding.ensure_utf8_stdio([out]) == []
+    assert out.calls == []
+
+
+def test_tolerates_unreconfigurable_streams():
+    out = _FakeStream("cp1252", fail=True)
+    assert _encoding.ensure_utf8_stdio([out]) == []
+
+
+def test_handles_none_stream():
+    assert _encoding.ensure_utf8_stdio([None]) == []
+
+
+def test_cp1252_stub_can_print_chinese_without_utf8():
+    """反向自证：cp1252 严格模式下打印中文会炸——证明该环境确实需要守卫。"""
+    import pytest
+
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+    with pytest.raises(UnicodeEncodeError):
+        stream.write("中文失败率")
+        stream.flush()

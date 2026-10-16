@@ -1,0 +1,82 @@
+{
+  "_note": "失败模式规则表（模块 3）。门控硬约束：status 必须为 verified 且 verified_samples 非空，规则才进计算路径；否则落 other 并在报告\"未生效规则\"节列出原因。verified_samples 一律来自 M1 阶段本机实测的错误文本（截取片段，不含本机绝对路径与个人信息）。",
+  "_version": 1,
+  "_source": "data/README.md §五 A / §五 D（2026-10-16 本机实测）",
+  "categories": [
+    "timeout",
+    "permission_denied",
+    "invalid_args",
+    "content_refusal",
+    "other"
+  ],
+  "rules": [
+    {
+      "id": "F-TIMEOUT-1",
+      "category": "timeout",
+      "status": "verified",
+      "patterns": [
+        "Command timed out after",
+        "\\bT?imeout(after|exceeded|Error|Exception)?\\b",
+        "ETIMEDOUT",
+        "Exit code: 124"
+      ],
+      "verified_samples": [
+        "Exit code 143 / Command timed out after 10m 0s",
+        "Codex rollout: Exit code: 124（超时惯例值，本机实测 2 条）"
+      ],
+      "note": "本机实测：Claude 侧 1 条真实样例（tool_result.is_error=true）；Codex 侧 Exit code 124 为超时惯例值"
+    },
+    {
+      "id": "F-PERM-1",
+      "category": "permission_denied",
+      "status": "verified",
+      "patterns": [
+        "PermissionError",
+        "Permission denied",
+        "Access is denied",
+        "\\bEACCES\\b",
+        "0x80070005"
+      ],
+      "verified_samples": [
+        "PermissionError: [Errno 13] Permission denied: '<本机路径已省略>'",
+        "failed with error: 0x80070005 / Access is denied."
+      ],
+      "note": "本机实测 5 条真实样例（tool_result.is_error=true）"
+    },
+    {
+      "id": "F-ARGS-1",
+      "category": "invalid_args",
+      "status": "verified",
+      "patterns": [
+        "SyntaxError",
+        "invalid syntax",
+        "unrecognized argument",
+        "unexpected argument",
+        "no such option",
+        "TypeError",
+        "AttributeError",
+        "KeyError",
+        "usage: "
+      ],
+      "verified_samples": [
+        "SyntaxError: invalid syntax",
+        "AttributeError: module 'cairosvg' has no attribute 'svg2url'",
+        "SyntaxError: EOL while scanning string literal"
+      ],
+      "note": "本机实测 6 条真实样例（tool_result.is_error=true）"
+    },
+    {
+      "id": "F-REFUSE-1",
+      "category": "content_refusal",
+      "status": "pending",
+      "patterns": [
+        "cannot assist",
+        "unable to comply",
+        "refuse[sd]? to",
+        "policy violation"
+      ],
+      "verified_samples": [],
+      "note": "本机 94 个会话日志中 0 条匹配样例（2026-10-16 实测）→ 按纪律不生效、落 other。合成基准会植入该类记录，但该植入**不作为规则的已核对样例**（那是自证循环）；规则待真实样例出现后再转 verified"
+    }
+  ]
+}

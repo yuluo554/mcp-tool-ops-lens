@@ -176,10 +176,22 @@ py -X utf8 -m opslens bench --only NOPE                                   # → 
 - [x] `examples/report.md` / `report.html` / `report.json` 入仓（基于合成数据）
 - [x] **断网 e2e 演示通过**；退出码语义按 README 明示逐条记录（0/1/2/4 全实测）
 - [x] **编码守门覆盖所有可打印入口**（主 CLI + `tools/` 全部脚本）
-- [x] `tests/` 全绿：**双解释器各 284 passed**
+- [x] `tests/` 全绿：**双解释器各 284 passed**（M6 后为 **285 passed**，见下）
 - [x] 变异验证 **36/36**（M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项）
 - [x] **HANDOFF-M6 落盘并 commit**（本文件）
-- [ ] M6 发布 —— **下一棒（见 §二）**
+- [x] **M6 发布 —— 本棒完成**（✅ 2026-10-16，见 `plan/RELEASE-M6.md`）
+  - 公开仓 https://github.com/yuluo554/mcp-tool-ops-lens · tag `v0.1.0` · Release 附源码 zip · CI 四矩阵绿
+
+**M6 出口门实跑记录（2026-10-16，终版收官）**：
+- **干净环境验证**：裸 clone + 全新 venv 按 README 逐条跑通，11 条命令退出码全部符合明示语义
+  （留档 `plan/verify/README.md`）。抓出 2 个真实缺陷并修复：3.8 自带 pip 无法可编辑安装；wheel 不含规则包。
+- **脱敏四步 + 产物扫描 + 元数据邮箱**：0 硬门命中；元数据邮箱已是 GitHub noreply（**无需历史重写**）。
+  四步固化为入仓工具 `tools/audit_desensitize.py`（selftest 阳性/阴性对照 + 无 git 兜底）。
+- **CI**：首跑 1 轮红（**CI 步骤 `set -e` 与 report 契约退出码 1 接线缺陷**，四矩阵同点）→ 修复即绿；
+  截至终态 9 个 run，push 事件数 = run 数，同 sha 双 run 靠 `event`+`head_branch` 区分（tag push **会**触发）。
+- **tag + Release**：经用户确认后执行（三件套齐备）；发布物本体复核（真下载 + sha256 对账 + 中立目录自检）
+  抓出审计器**无 git 兜底**缺陷 → 零消费者窗口内修复 + 重建附件 + 迁移 tag + 复验。
+- **测试**：**285 passed**（双解释器）；变异 **40/40**（M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 四项）。
 
 **偏差说明（如实留档）**：
 - **CI 未实跑**：本棒无远端。待 M6 首推验证。CI 已新增 report 两条步骤（报告产物 + 零外链硬门 /

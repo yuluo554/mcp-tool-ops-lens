@@ -118,3 +118,47 @@ def test_guard_detector_actually_detects():
     good = "def main():\n    _encoding.ensure_utf8_stdio()\n"
     assert "ensure_utf8_stdio" in good
 
+
+# ---------------------------------------------------------------------------
+# 主 CLI 入口同样在守门面内（M5：可打印入口 = 主 CLI + tools/ 全部脚本）
+# ---------------------------------------------------------------------------
+
+_MAIN_CLI = os.path.join(_REPO_ROOT, "src", "opslens", "cli.py")
+_PACKAGE_MAIN = os.path.join(_REPO_ROOT, "src", "opslens", "__main__.py")
+
+
+def _calls_guard_in(text, func_name):
+    """断言文本中 `def <func_name>` 之后的函数体里调用了守卫。"""
+    marker = "def {0}(".format(func_name)
+    start = text.find(marker)
+    if start < 0:
+        return False
+    return "ensure_utf8_stdio" in text[start:]
+
+
+def test_main_cli_entry_point_calls_utf8_guard():
+    """主 CLI 的 `main()` 必须在入口处调 `ensure_utf8_stdio()`（可打印入口覆盖的第一项）。"""
+    with open(_MAIN_CLI, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    assert _calls_guard_in(text, "main"), "主 CLI 的 main() 未调 UTF-8 守卫"
+
+
+def test_package_main_routes_through_cli_main():
+    """`python -m opslens` 通路必须走 `cli.main`（与 console script 同一条守卫路径）。"""
+    with open(_PACKAGE_MAIN, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    assert "from .cli import main" in text
+    assert "sys.exit(main())" in text
+
+
+def test_printable_entry_points_cover_main_cli_and_all_tools():
+    """可打印入口扫描面 = 主 CLI + tools/ 全部脚本（DoD 逐项：两处都要覆盖）。"""
+    scripts = _printable_entry_points()
+    assert scripts, "tools/ 下未扫到任何带 main() 的脚本"
+    # tools/ 全量覆盖（每个都断言过守卫）
+    for path in scripts:
+        with open(path, "r", encoding="utf-8") as handle:
+            assert "ensure_utf8_stdio" in handle.read(), os.path.relpath(path, _REPO_ROOT)
+    # 主 CLI 亦在面内
+    assert os.path.isfile(_MAIN_CLI)
+

@@ -1,0 +1,941 @@
+{
+  "failure_attribution": {
+    "by_category": [
+      {
+        "calls": 24,
+        "category": "timeout"
+      },
+      {
+        "calls": 25,
+        "category": "permission_denied"
+      },
+      {
+        "calls": 22,
+        "category": "invalid_args"
+      },
+      {
+        "calls": 0,
+        "category": "content_refusal"
+      },
+      {
+        "calls": 4,
+        "category": "other"
+      }
+    ],
+    "calls_error": 75,
+    "categories": [
+      "timeout",
+      "permission_denied",
+      "invalid_args",
+      "content_refusal",
+      "other"
+    ],
+    "coverage_note": "归因只在失败记录（status=error）的 error_text 上匹配；status=unknown 的记录不参与归因（未声明成败 ≠ 失败）；未生效规则（status≠verified 或 verified_samples 为空）不参与匹配，其覆盖的类别落 other。",
+    "effective_rule_ids": [
+      "F-TIMEOUT-1",
+      "F-PERM-1",
+      "F-ARGS-1"
+    ],
+    "ineffective_rules": [
+      {
+        "id": "F-REFUSE-1",
+        "reasons": [
+          "status=pending",
+          "verified_samples 为空"
+        ]
+      }
+    ],
+    "matched": 71,
+    "matched_patterns": [
+      {
+        "calls": 8,
+        "pattern": "AttributeError",
+        "rule_id": "F-ARGS-1"
+      },
+      {
+        "calls": 8,
+        "pattern": "SyntaxError",
+        "rule_id": "F-ARGS-1"
+      },
+      {
+        "calls": 6,
+        "pattern": "unexpected argument",
+        "rule_id": "F-ARGS-1"
+      },
+      {
+        "calls": 13,
+        "pattern": "Access is denied",
+        "rule_id": "F-PERM-1"
+      },
+      {
+        "calls": 12,
+        "pattern": "PermissionError",
+        "rule_id": "F-PERM-1"
+      },
+      {
+        "calls": 15,
+        "pattern": "Command timed out after",
+        "rule_id": "F-TIMEOUT-1"
+      },
+      {
+        "calls": 8,
+        "pattern": "ETIMEDOUT",
+        "rule_id": "F-TIMEOUT-1"
+      },
+      {
+        "calls": 1,
+        "pattern": "Exit code: 124",
+        "rule_id": "F-TIMEOUT-1"
+      }
+    ],
+    "other": 4
+  },
+  "inputs": {
+    "aggregate_schema": "opslens.aggregate/1",
+    "attribute_schema": "opslens.attribute/1",
+    "events_schema": "opslens.events/1",
+    "rate_precision": 6
+  },
+  "insufficient_data": [
+    {
+      "axis": "failure_rate",
+      "basis": "口径：样本量低于门槛一律降级为\"数据不足\"，不出建议——绝不因小样本给出\"建议移除\"。",
+      "metric": "calls_total",
+      "observed_sample": 8,
+      "reason": "样本不足，降级为\"数据不足\"，不出建议",
+      "required_sample": 20,
+      "server": "<codex>",
+      "source": "codex",
+      "threshold": {
+        "calls_total_gte": 20
+      }
+    },
+    {
+      "axis": "turn_token_avg",
+      "basis": "口径：样本量低于门槛一律降级为\"数据不足\"，不出建议——绝不因小样本给出\"建议移除\"。",
+      "metric": "token_samples",
+      "observed_sample": 0,
+      "reason": "token 参与样本不足，开销轴降级为\"数据不足\"，不出建议",
+      "required_sample": 20,
+      "server": "<codex>",
+      "source": "codex",
+      "threshold": {
+        "token_samples_gte": 20
+      }
+    }
+  ],
+  "positioning": {
+    "not_auto_modify": "建议仅供参考，不自动修改配置：本工具**绝不**增删改任何 MCP server 配置或用户设置，一切处置由使用者自行判断与执行。",
+    "statement": "本报告由本机会话日志**只读**统计得出：统计为确定性计数，归因是规则匹配，全程不引入任何模型、零上传、零遥测。"
+  },
+  "rankings": {
+    "failure_rate_top": [
+      {
+        "server": "fake-high-fail",
+        "source": "claude_code",
+        "value": 0.6
+      },
+      {
+        "server": "fake-threshold-exact",
+        "source": "claude_code",
+        "value": 0.5
+      },
+      {
+        "server": "fake-near-miss",
+        "source": "claude_code",
+        "value": 0.475
+      },
+      {
+        "server": "<codex>",
+        "source": "codex",
+        "value": 0.428571
+      },
+      {
+        "server": "fake-mid-fail",
+        "source": "claude_code",
+        "value": 0.277778
+      },
+      {
+        "server": "fake-retry",
+        "source": "claude_code",
+        "value": 0.266667
+      },
+      {
+        "server": "fake-low-fail",
+        "source": "claude_code",
+        "value": 0.041667
+      }
+    ],
+    "note": "排名只按聚合载荷里已算好的 failure_rate / turn_token_avg 排序，本层不重算；值为 null（分母为 0 或无样本）的维度不参与排名。",
+    "turn_token_top": [
+      {
+        "server": "fake-high-fail",
+        "source": "claude_code",
+        "value": 68303.0
+      },
+      {
+        "server": "fake-near-miss",
+        "source": "claude_code",
+        "value": 18832.65
+      },
+      {
+        "server": "fake-mid-fail",
+        "source": "claude_code",
+        "value": 18540.6
+      },
+      {
+        "server": "fake-retry",
+        "source": "claude_code",
+        "value": 18474.6
+      },
+      {
+        "server": "fake-threshold-exact",
+        "source": "claude_code",
+        "value": 18145.15
+      },
+      {
+        "server": "fake-low-fail",
+        "source": "claude_code",
+        "value": 3546.291667
+      }
+    ]
+  },
+  "schema": "opslens.report/1",
+  "server_metrics": [
+    {
+      "calls_error": 24,
+      "calls_ok": 16,
+      "calls_total": 40,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 40,
+      "duration_samples": 0,
+      "failure_rate": 0.6,
+      "failure_rate_denominator": 40,
+      "failure_rate_numerator": 24,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 0,
+      "server": "fake-high-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 40,
+      "tokens_cache_creation": 25409,
+      "tokens_cache_read": 653953,
+      "tokens_input": 1998938,
+      "tokens_output": 53820,
+      "turn_token_avg": 68303.0
+    },
+    {
+      "calls_error": 1,
+      "calls_ok": 23,
+      "calls_total": 24,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 24,
+      "duration_samples": 0,
+      "failure_rate": 0.041667,
+      "failure_rate_denominator": 24,
+      "failure_rate_numerator": 1,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 0,
+      "server": "fake-low-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 24,
+      "tokens_cache_creation": 12357,
+      "tokens_cache_read": 3912,
+      "tokens_input": 65241,
+      "tokens_output": 3601,
+      "turn_token_avg": 3546.291667
+    },
+    {
+      "calls_error": 10,
+      "calls_ok": 26,
+      "calls_total": 40,
+      "calls_unknown": 4,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 40,
+      "duration_samples": 0,
+      "failure_rate": 0.277778,
+      "failure_rate_denominator": 36,
+      "failure_rate_numerator": 10,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 0,
+      "server": "fake-mid-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 40,
+      "tokens_cache_creation": 24099,
+      "tokens_cache_read": 146798,
+      "tokens_input": 548469,
+      "tokens_output": 22258,
+      "turn_token_avg": 18540.6
+    },
+    {
+      "calls_error": 19,
+      "calls_ok": 21,
+      "calls_total": 40,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 40,
+      "duration_samples": 0,
+      "failure_rate": 0.475,
+      "failure_rate_denominator": 40,
+      "failure_rate_numerator": 19,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 0,
+      "server": "fake-near-miss",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 40,
+      "tokens_cache_creation": 25335,
+      "tokens_cache_read": 145057,
+      "tokens_input": 562541,
+      "tokens_output": 20373,
+      "turn_token_avg": 18832.65
+    },
+    {
+      "calls_error": 8,
+      "calls_ok": 22,
+      "calls_total": 30,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 30,
+      "duration_samples": 0,
+      "failure_rate": 0.266667,
+      "failure_rate_denominator": 30,
+      "failure_rate_numerator": 8,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 8,
+      "server": "fake-retry",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 30,
+      "tokens_cache_creation": 19151,
+      "tokens_cache_read": 102977,
+      "tokens_input": 416761,
+      "tokens_output": 15349,
+      "turn_token_avg": 18474.6
+    },
+    {
+      "calls_error": 10,
+      "calls_ok": 10,
+      "calls_total": 20,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.5,
+      "failure_rate_denominator": 20,
+      "failure_rate_numerator": 10,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 0,
+      "server": "fake-threshold-exact",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 12824,
+      "tokens_cache_read": 65238,
+      "tokens_input": 273713,
+      "tokens_output": 11128,
+      "turn_token_avg": 18145.15
+    },
+    {
+      "calls_error": 3,
+      "calls_ok": 4,
+      "calls_total": 8,
+      "calls_unknown": 1,
+      "duration_available": true,
+      "duration_avg_ms": 3757.142857,
+      "duration_missing": 1,
+      "duration_samples": 7,
+      "failure_rate": 0.428571,
+      "failure_rate_denominator": 7,
+      "failure_rate_numerator": 3,
+      "insufficient_data": false,
+      "level": "server",
+      "retry_count": 3,
+      "server": "<codex>",
+      "source": "codex",
+      "token_missing": 8,
+      "token_samples": 0,
+      "tokens_cache_creation": null,
+      "tokens_cache_read": null,
+      "tokens_input": null,
+      "tokens_output": null,
+      "turn_token_avg": null
+    }
+  ],
+  "source_declaration": {
+    "coverage_note": "来源与覆盖声明：以上为本次实际扫描的日志文件与 schema 版本；未知版本或不可判别形态的日志不会被静默解析。",
+    "home": "data/synthetic",
+    "schema_versions": {
+      "claude_code": [
+        "2.1.233"
+      ],
+      "codex": [
+        "0.146.0-alpha.3.1"
+      ]
+    },
+    "sources": [
+      {
+        "kind": "claude_jsonl",
+        "relative": "logs/claude_alpha.jsonl"
+      },
+      {
+        "kind": "codex_rollout",
+        "relative": "logs/codex_alpha.jsonl"
+      }
+    ],
+    "totals": {
+      "calls_error": 75,
+      "calls_ok": 122,
+      "calls_total": 202,
+      "calls_unknown": 5,
+      "duration_samples": 7,
+      "failure_rate": 0.380711,
+      "failure_rate_denominator": 197,
+      "failure_rate_numerator": 75,
+      "retry_count": 11,
+      "servers": 7,
+      "token_missing": 8,
+      "token_samples": 194
+    },
+    "totals_note": "汇总口径与 server 级同源（对账等式：ok + error + unknown == 总数）；失败率分母不含 unknown；token 四项分列不合并。"
+  },
+  "suggestions": [
+    {
+      "axis": "failure_rate",
+      "basis": "口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。",
+      "denominator": 40,
+      "metric": "failure_rate",
+      "numerator": 24,
+      "sample_requirement": {
+        "calls_total_gte": 20
+      },
+      "sample_size": 40,
+      "server": "fake-high-fail",
+      "source": "claude_code",
+      "threshold": {
+        "failure_rate_gte": 0.5
+      },
+      "type": "remove_candidate",
+      "value": 0.6
+    },
+    {
+      "axis": "failure_rate",
+      "basis": "口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。",
+      "denominator": 20,
+      "metric": "failure_rate",
+      "numerator": 10,
+      "sample_requirement": {
+        "calls_total_gte": 20
+      },
+      "sample_size": 20,
+      "server": "fake-threshold-exact",
+      "source": "claude_code",
+      "threshold": {
+        "failure_rate_gte": 0.5
+      },
+      "type": "remove_candidate",
+      "value": 0.5
+    },
+    {
+      "axis": "failure_rate",
+      "basis": "口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。",
+      "denominator": 36,
+      "metric": "failure_rate",
+      "numerator": 10,
+      "sample_requirement": {
+        "calls_total_gte": 20
+      },
+      "sample_size": 40,
+      "server": "fake-mid-fail",
+      "source": "claude_code",
+      "threshold": {
+        "failure_rate_gte": 0.2,
+        "failure_rate_lt": 0.5
+      },
+      "type": "investigate",
+      "value": 0.277778
+    },
+    {
+      "axis": "failure_rate",
+      "basis": "口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。",
+      "denominator": 40,
+      "metric": "failure_rate",
+      "numerator": 19,
+      "sample_requirement": {
+        "calls_total_gte": 20
+      },
+      "sample_size": 40,
+      "server": "fake-near-miss",
+      "source": "claude_code",
+      "threshold": {
+        "failure_rate_gte": 0.2,
+        "failure_rate_lt": 0.5
+      },
+      "type": "investigate",
+      "value": 0.475
+    },
+    {
+      "axis": "failure_rate",
+      "basis": "口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。",
+      "denominator": 30,
+      "metric": "failure_rate",
+      "numerator": 8,
+      "sample_requirement": {
+        "calls_total_gte": 20
+      },
+      "sample_size": 30,
+      "server": "fake-retry",
+      "source": "claude_code",
+      "threshold": {
+        "failure_rate_gte": 0.2,
+        "failure_rate_lt": 0.5
+      },
+      "type": "investigate",
+      "value": 0.266667
+    },
+    {
+      "axis": "turn_token_avg",
+      "basis": "口径：turn_token_avg = 轮次 token 四项之和 / token_samples（按调用轮次归属，四项分列不合并）；Codex 侧 token 为会话级、不摊到单次调用，故其 token_samples 为 0、本轴不出建议。",
+      "denominator": 40,
+      "metric": "turn_token_avg",
+      "missing": 0,
+      "numerator": 2732120,
+      "sample_requirement": {
+        "token_samples_gte": 20
+      },
+      "sample_size": 40,
+      "server": "fake-high-fail",
+      "source": "claude_code",
+      "threshold": {
+        "turn_token_avg_gte": 20000
+      },
+      "type": "cost_heavy",
+      "value": 68303.0
+    }
+  ],
+  "summary": {
+    "calls_error": 75,
+    "calls_total": 202,
+    "calls_unknown": 5,
+    "ineffective_rules": 1,
+    "insufficient_data": 2,
+    "remove_candidate": 2,
+    "servers": 7,
+    "suggestions": 6
+  },
+  "tool_metrics": [
+    {
+      "calls_error": 11,
+      "calls_ok": 9,
+      "calls_total": 20,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.55,
+      "failure_rate_denominator": 20,
+      "failure_rate_numerator": 11,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-high-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 11961,
+      "tokens_cache_read": 336413,
+      "tokens_input": 995896,
+      "tokens_output": 27325,
+      "tool": "tool_exec",
+      "turn_token_avg": 68579.75
+    },
+    {
+      "calls_error": 13,
+      "calls_ok": 7,
+      "calls_total": 20,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.65,
+      "failure_rate_denominator": 20,
+      "failure_rate_numerator": 13,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-high-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 13448,
+      "tokens_cache_read": 317540,
+      "tokens_input": 1003042,
+      "tokens_output": 26495,
+      "tool": "tool_fetch",
+      "turn_token_avg": 68026.25
+    },
+    {
+      "calls_error": 1,
+      "calls_ok": 23,
+      "calls_total": 24,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 24,
+      "duration_samples": 0,
+      "failure_rate": 0.041667,
+      "failure_rate_denominator": 24,
+      "failure_rate_numerator": 1,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-low-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 24,
+      "tokens_cache_creation": 12357,
+      "tokens_cache_read": 3912,
+      "tokens_input": 65241,
+      "tokens_output": 3601,
+      "tool": "tool_scan",
+      "turn_token_avg": 3546.291667
+    },
+    {
+      "calls_error": 4,
+      "calls_ok": 13,
+      "calls_total": 20,
+      "calls_unknown": 3,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.235294,
+      "failure_rate_denominator": 17,
+      "failure_rate_numerator": 4,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-mid-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 11200,
+      "tokens_cache_read": 66066,
+      "tokens_input": 256493,
+      "tokens_output": 10829,
+      "tool": "tool_index",
+      "turn_token_avg": 17229.4
+    },
+    {
+      "calls_error": 6,
+      "calls_ok": 13,
+      "calls_total": 20,
+      "calls_unknown": 1,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.315789,
+      "failure_rate_denominator": 19,
+      "failure_rate_numerator": 6,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-mid-fail",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 12899,
+      "tokens_cache_read": 80732,
+      "tokens_input": 291976,
+      "tokens_output": 11429,
+      "tool": "tool_query",
+      "turn_token_avg": 19851.8
+    },
+    {
+      "calls_error": 19,
+      "calls_ok": 21,
+      "calls_total": 40,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 40,
+      "duration_samples": 0,
+      "failure_rate": 0.475,
+      "failure_rate_denominator": 40,
+      "failure_rate_numerator": 19,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-near-miss",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 40,
+      "tokens_cache_creation": 25335,
+      "tokens_cache_read": 145057,
+      "tokens_input": 562541,
+      "tokens_output": 20373,
+      "tool": "tool_probe",
+      "turn_token_avg": 18832.65
+    },
+    {
+      "calls_error": 8,
+      "calls_ok": 22,
+      "calls_total": 30,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 30,
+      "duration_samples": 0,
+      "failure_rate": 0.266667,
+      "failure_rate_denominator": 30,
+      "failure_rate_numerator": 8,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 8,
+      "server": "fake-retry",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 30,
+      "tokens_cache_creation": 19151,
+      "tokens_cache_read": 102977,
+      "tokens_input": 416761,
+      "tokens_output": 15349,
+      "tool": "tool_sync",
+      "turn_token_avg": 18474.6
+    },
+    {
+      "calls_error": 10,
+      "calls_ok": 10,
+      "calls_total": 20,
+      "calls_unknown": 0,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 20,
+      "duration_samples": 0,
+      "failure_rate": 0.5,
+      "failure_rate_denominator": 20,
+      "failure_rate_numerator": 10,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "fake-threshold-exact",
+      "source": "claude_code",
+      "token_missing": 0,
+      "token_samples": 20,
+      "tokens_cache_creation": 12824,
+      "tokens_cache_read": 65238,
+      "tokens_input": 273713,
+      "tokens_output": 11128,
+      "tool": "tool_check",
+      "turn_token_avg": 18145.15
+    },
+    {
+      "calls_error": 0,
+      "calls_ok": 1,
+      "calls_total": 1,
+      "calls_unknown": 0,
+      "duration_available": true,
+      "duration_avg_ms": 200.0,
+      "duration_missing": 0,
+      "duration_samples": 1,
+      "failure_rate": 0.0,
+      "failure_rate_denominator": 1,
+      "failure_rate_numerator": 0,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "<codex>",
+      "source": "codex",
+      "token_missing": 1,
+      "token_samples": 0,
+      "tokens_cache_creation": null,
+      "tokens_cache_read": null,
+      "tokens_input": null,
+      "tokens_output": null,
+      "tool": "apply_patch",
+      "turn_token_avg": null
+    },
+    {
+      "calls_error": 3,
+      "calls_ok": 2,
+      "calls_total": 5,
+      "calls_unknown": 0,
+      "duration_available": true,
+      "duration_avg_ms": 4980.0,
+      "duration_missing": 0,
+      "duration_samples": 5,
+      "failure_rate": 0.6,
+      "failure_rate_denominator": 5,
+      "failure_rate_numerator": 3,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 3,
+      "server": "<codex>",
+      "source": "codex",
+      "token_missing": 5,
+      "token_samples": 0,
+      "tokens_cache_creation": null,
+      "tokens_cache_read": null,
+      "tokens_input": null,
+      "tokens_output": null,
+      "tool": "exec",
+      "turn_token_avg": null
+    },
+    {
+      "calls_error": 0,
+      "calls_ok": 1,
+      "calls_total": 1,
+      "calls_unknown": 0,
+      "duration_available": true,
+      "duration_avg_ms": 1200.0,
+      "duration_missing": 0,
+      "duration_samples": 1,
+      "failure_rate": 0.0,
+      "failure_rate_denominator": 1,
+      "failure_rate_numerator": 0,
+      "insufficient_data": false,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "<codex>",
+      "source": "codex",
+      "token_missing": 1,
+      "token_samples": 0,
+      "tokens_cache_creation": null,
+      "tokens_cache_read": null,
+      "tokens_input": null,
+      "tokens_output": null,
+      "tool": "shell_command",
+      "turn_token_avg": null
+    },
+    {
+      "calls_error": 0,
+      "calls_ok": 0,
+      "calls_total": 1,
+      "calls_unknown": 1,
+      "duration_available": false,
+      "duration_avg_ms": null,
+      "duration_missing": 1,
+      "duration_samples": 0,
+      "failure_rate": null,
+      "failure_rate_denominator": 0,
+      "failure_rate_numerator": 0,
+      "insufficient_data": true,
+      "level": "tool",
+      "retry_count": 0,
+      "server": "<codex>",
+      "source": "codex",
+      "token_missing": 1,
+      "token_samples": 0,
+      "tokens_cache_creation": null,
+      "tokens_cache_read": null,
+      "tokens_input": null,
+      "tokens_output": null,
+      "tool": "view_image",
+      "turn_token_avg": null
+    }
+  ],
+  "unknown_partition": {
+    "by_server": [
+      {
+        "calls_error": 24,
+        "calls_ok": 16,
+        "calls_total": 40,
+        "calls_unknown": 0,
+        "duration_missing": 40,
+        "server": "fake-high-fail",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 1,
+        "calls_ok": 23,
+        "calls_total": 24,
+        "calls_unknown": 0,
+        "duration_missing": 24,
+        "server": "fake-low-fail",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 10,
+        "calls_ok": 26,
+        "calls_total": 40,
+        "calls_unknown": 4,
+        "duration_missing": 40,
+        "server": "fake-mid-fail",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 19,
+        "calls_ok": 21,
+        "calls_total": 40,
+        "calls_unknown": 0,
+        "duration_missing": 40,
+        "server": "fake-near-miss",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 8,
+        "calls_ok": 22,
+        "calls_total": 30,
+        "calls_unknown": 0,
+        "duration_missing": 30,
+        "server": "fake-retry",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 10,
+        "calls_ok": 10,
+        "calls_total": 20,
+        "calls_unknown": 0,
+        "duration_missing": 20,
+        "server": "fake-threshold-exact",
+        "source": "claude_code",
+        "token_missing": 0
+      },
+      {
+        "calls_error": 3,
+        "calls_ok": 4,
+        "calls_total": 8,
+        "calls_unknown": 1,
+        "duration_missing": 1,
+        "server": "<codex>",
+        "source": "codex",
+        "token_missing": 8
+      }
+    ],
+    "calls_total": 202,
+    "calls_unknown": 5,
+    "duration_missing": 195,
+    "note": "unknown = 日志未声明成败（缺失 is_error 键），**既非成功也非失败**：它不进失败率分母，也不参与归因；token/duration 缺失同理，缺失 ≠ 0。",
+    "title": "未知态与样本缺失（独立分区，不混入统计）",
+    "token_missing": 8,
+    "unattributed": {
+      "calls_error": 75,
+      "calls_unknown": 5,
+      "note": "未参与归因的失败/未知：归因只消费 status=error 的记录；unknown 记录即便带错误文本也不参与归因（未声明成败 ≠ 失败）。"
+    }
+  }
+}

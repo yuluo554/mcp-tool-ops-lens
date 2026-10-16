@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>opslens 删换建议报告</title>
+<style>
+:root { color-scheme: light; }
+body { margin: 0; padding: 2rem; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+       line-height: 1.6; color: #1f2328; background: #ffffff; }
+h1 { font-size: 1.6rem; border-bottom: 2px solid #d0d7de; padding-bottom: .5rem; }
+h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid #eaeef2; padding-bottom: .3rem; }
+h3 { font-size: 1.05rem; margin-top: 1.25rem; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; font-size: .92rem; }
+th, td { border: 1px solid #d0d7de; padding: .35rem .6rem; text-align: left; }
+th { background: #f6f8fa; }
+code { background: #f6f8fa; padding: .1rem .3rem; border-radius: 3px; font-size: .9em; }
+blockquote { margin: .5rem 0; padding: .4rem .8rem; border-left: 4px solid #d0d7de; color: #57606a; }
+.badge { display: inline-block; padding: .1rem .45rem; border-radius: 999px; font-size: .8rem;
+         border: 1px solid #d0d7de; background: #f6f8fa; }
+.note { color: #57606a; font-size: .9rem; }
+.warn { color: #9a6700; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>opslens 删换建议报告</h1>
+<p class="note">schema：<code>opslens.report/1</code>　定位：本报告由本机会话日志**只读**统计得出：统计为确定性计数，归因是规则匹配，全程不引入任何模型、零上传、零遥测。</p>
+<h2>摘要</h2>
+<ul><li>server 数：<b>7</b></li><li>调用总数：<b>202</b>（error 75 / unknown 5）</li><li>建议条数：<b>6</b>（其中"建议移除" <b>2</b>）</li><li>"数据不足"降级条数：<b>2</b></li><li>未生效规则条数：<b>1</b></li></ul>
+<h2>一、数据来源与覆盖声明</h2>
+<ul><li>扫描根目录：<code>data/synthetic</code></li><li>输入 schema：events <code>opslens.events/1</code> / aggregate <code>opslens.aggregate/1</code> / attribute <code>opslens.attribute/1</code></li></ul>
+<table><thead><tr><th>来源文件</th><th>类型</th></tr></thead><tbody><tr><td><code>logs/claude_alpha.jsonl</code></td><td>claude_jsonl</td></tr><tr><td><code>logs/codex_alpha.jsonl</code></td><td>codex_rollout</td></tr></tbody></table>
+<ul><li>schema 版本：claude_code = 2.1.233；codex = 0.146.0-alpha.3.1</li><li>来源与覆盖声明：以上为本次实际扫描的日志文件与 schema 版本；未知版本或不可判别形态的日志不会被静默解析。</li><li>汇总口径与 server 级同源（对账等式：ok + error + unknown == 总数）；失败率分母不含 unknown；token 四项分列不合并。</li></ul>
+<h2>二、未知态与样本缺失（独立分区，不混入统计）</h2>
+<p class="note">unknown = 日志未声明成败（缺失 is_error 键），**既非成功也非失败**：它不进失败率分母，也不参与归因；token/duration 缺失同理，缺失 ≠ 0。</p>
+<ul><li>unknown 调用：<b>5</b> / 总调用 202</li><li>token 缺失样本：<b>8</b></li><li>耗时缺失样本：<b>195</b></li></ul>
+<table><thead><tr><th>source</th><th>server</th><th>总数</th><th>ok</th><th>error</th><th>unknown</th><th>token 缺失</th><th>耗时缺失</th></tr></thead><tbody><tr><td>claude_code</td><td>fake-high-fail</td><td>40</td><td>16</td><td>24</td><td>0</td><td>0</td><td>40</td></tr><tr><td>claude_code</td><td>fake-low-fail</td><td>24</td><td>23</td><td>1</td><td>0</td><td>0</td><td>24</td></tr><tr><td>claude_code</td><td>fake-mid-fail</td><td>40</td><td>26</td><td>10</td><td>4</td><td>0</td><td>40</td></tr><tr><td>claude_code</td><td>fake-near-miss</td><td>40</td><td>21</td><td>19</td><td>0</td><td>0</td><td>40</td></tr><tr><td>claude_code</td><td>fake-retry</td><td>30</td><td>22</td><td>8</td><td>0</td><td>0</td><td>30</td></tr><tr><td>claude_code</td><td>fake-threshold-exact</td><td>20</td><td>10</td><td>10</td><td>0</td><td>0</td><td>20</td></tr><tr><td>codex</td><td>&lt;codex&gt;</td><td>8</td><td>4</td><td>3</td><td>1</td><td>8</td><td>1</td></tr></tbody></table>
+<blockquote>未参与归因的失败/未知：归因只消费 status=error 的记录；unknown 记录即便带错误文本也不参与归因（未声明成败 ≠ 失败）。</blockquote>
+<h2>三、建议清单</h2>
+<h3><span class="badge">remove_candidate</span> claude_code/fake-high-fail</h3>
+<ul><li>口径：<code>failure_rate</code> = <b>0.6</b></li><li>分子/分母：<b>24</b> / <b>40</b></li><li>样本量：<b>40</b></li><li>阈值取值：failure_rate_gte=0.5</li><li>样本门槛：calls_total_gte=20</li><li>口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。</li></ul>
+<h3><span class="badge">remove_candidate</span> claude_code/fake-threshold-exact</h3>
+<ul><li>口径：<code>failure_rate</code> = <b>0.5</b></li><li>分子/分母：<b>10</b> / <b>20</b></li><li>样本量：<b>20</b></li><li>阈值取值：failure_rate_gte=0.5</li><li>样本门槛：calls_total_gte=20</li><li>口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。</li></ul>
+<h3><span class="badge">investigate</span> claude_code/fake-mid-fail</h3>
+<ul><li>口径：<code>failure_rate</code> = <b>0.277778</b></li><li>分子/分母：<b>10</b> / <b>36</b></li><li>样本量：<b>40</b></li><li>阈值取值：failure_rate_gte=0.2, failure_rate_lt=0.5</li><li>样本门槛：calls_total_gte=20</li><li>口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。</li></ul>
+<h3><span class="badge">investigate</span> claude_code/fake-near-miss</h3>
+<ul><li>口径：<code>failure_rate</code> = <b>0.475</b></li><li>分子/分母：<b>19</b> / <b>40</b></li><li>样本量：<b>40</b></li><li>阈值取值：failure_rate_gte=0.2, failure_rate_lt=0.5</li><li>样本门槛：calls_total_gte=20</li><li>口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。</li></ul>
+<h3><span class="badge">investigate</span> claude_code/fake-retry</h3>
+<ul><li>口径：<code>failure_rate</code> = <b>0.266667</b></li><li>分子/分母：<b>8</b> / <b>30</b></li><li>样本量：<b>30</b></li><li>阈值取值：failure_rate_gte=0.2, failure_rate_lt=0.5</li><li>样本门槛：calls_total_gte=20</li><li>口径：失败率 = calls_error / (calls_ok + calls_error)，分母不含 unknown（缺失态不进分母）；阈值取自 thresholds.json，改该文件即为调参，不需改代码。</li></ul>
+<h3><span class="badge">cost_heavy</span> claude_code/fake-high-fail</h3>
+<ul><li>口径：<code>turn_token_avg</code> = <b>68303</b></li><li>分子/分母：<b>2732120</b> / <b>40</b></li><li>样本量：<b>40</b></li><li>阈值取值：turn_token_avg_gte=20000</li><li>样本门槛：token_samples_gte=20</li><li>口径：turn_token_avg = 轮次 token 四项之和 / token_samples（按调用轮次归属，四项分列不合并）；Codex 侧 token 为会话级、不摊到单次调用，故其 token_samples 为 0、本轴不出建议。</li></ul>
+<h3>数据不足（降级，不出建议）</h3>
+<table><thead><tr><th>轴</th><th>source</th><th>server</th><th>观测样本</th><th>需要样本</th><th>原因</th></tr></thead><tbody><tr><td>failure_rate</td><td>codex</td><td>&lt;codex&gt;</td><td>8</td><td>20</td><td>样本不足，降级为&quot;数据不足&quot;，不出建议</td></tr><tr><td>turn_token_avg</td><td>codex</td><td>&lt;codex&gt;</td><td>0</td><td>20</td><td>token 参与样本不足，开销轴降级为&quot;数据不足&quot;，不出建议</td></tr></tbody></table>
+<blockquote>未生效规则清单（不参与匹配，其覆盖类别落 <code>other</code>）：F-REFUSE-1（status=pending，verified_samples 为空）</blockquote>
+<h2>四、失败模式归因（规则匹配，非 AI 评分）</h2>
+<p>失败调用 75 次：命中规则 71 次 / 落 other 4 次。</p>
+<table><thead><tr><th>类别</th><th>次数</th></tr></thead><tbody><tr><td>timeout</td><td>24</td></tr><tr><td>permission_denied</td><td>25</td></tr><tr><td>invalid_args</td><td>22</td></tr><tr><td>content_refusal</td><td>0</td></tr><tr><td>other</td><td>4</td></tr></tbody></table>
+<p>生效规则：F-TIMEOUT-1, F-PERM-1, F-ARGS-1</p>
+<p>未生效规则（原因）：</p>
+<ul><li><code>F-REFUSE-1</code>：status=pending，verified_samples 为空</li></ul>
+<h2>五、排名（Top 清单）</h2>
+<p class="note">排名只按聚合载荷里已算好的 failure_rate / turn_token_avg 排序，本层不重算；值为 null（分母为 0 或无样本）的维度不参与排名。</p>
+<h3>失败率 Top</h3>
+<table><thead><tr><th>source</th><th>server</th><th>值</th></tr></thead><tbody><tr><td>claude_code</td><td>fake-high-fail</td><td>0.6</td></tr><tr><td>claude_code</td><td>fake-threshold-exact</td><td>0.5</td></tr><tr><td>claude_code</td><td>fake-near-miss</td><td>0.475</td></tr><tr><td>codex</td><td>&lt;codex&gt;</td><td>0.428571</td></tr><tr><td>claude_code</td><td>fake-mid-fail</td><td>0.277778</td></tr><tr><td>claude_code</td><td>fake-retry</td><td>0.266667</td></tr><tr><td>claude_code</td><td>fake-low-fail</td><td>0.041667</td></tr></tbody></table>
+<h3>token 开销 Top</h3>
+<table><thead><tr><th>source</th><th>server</th><th>值</th></tr></thead><tbody><tr><td>claude_code</td><td>fake-high-fail</td><td>68303</td></tr><tr><td>claude_code</td><td>fake-near-miss</td><td>18832.65</td></tr><tr><td>claude_code</td><td>fake-mid-fail</td><td>18540.6</td></tr><tr><td>claude_code</td><td>fake-retry</td><td>18474.6</td></tr><tr><td>claude_code</td><td>fake-threshold-exact</td><td>18145.15</td></tr><tr><td>claude_code</td><td>fake-low-fail</td><td>3546.291667</td></tr></tbody></table>
+<h2>六、定位与声明</h2>
+<ul><li>本报告由本机会话日志**只读**统计得出：统计为确定性计数，归因是规则匹配，全程不引入任何模型、零上传、零遥测。</li><li><span class="warn">建议仅供参考，不自动修改配置：本工具**绝不**增删改任何 MCP server 配置或用户设置，一切处置由使用者自行判断与执行。</span></li></ul>
+</body>
+</html>

@@ -5,9 +5,8 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层、M3 聚合归因、M4 真值基准已完成；M5–M6 见 `plan/05-里程碑.md`）。
-> 当前可用的子命令：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）、`bench`（真值基准对账）；
-> `report` 尚未落地，调用时会明确报"本构建尚未包含"并以退出码 2 退出——**绝不伪造空结果**。
+> 状态：**v0.1.0 开发中**（M0 计划与骨架、M1 数据先行、M2 解析层、M3 聚合归因、M4 真值基准、M5 交付报告已完成；M6 见 `plan/05-里程碑.md`）。
+> 五个子命令**全部落地**：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）、`report`（删换建议报告 MD/HTML/JSON）、`bench`（真值基准对账）。
 >
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
@@ -42,7 +41,7 @@ opslens aggregate --events events.json --out agg.json
 # 3) 对失败调用做规则匹配分类（超时 / 权限拒绝 / 参数错误 / 内容拒绝 / 其他）—— M3 已可用
 opslens attribute --events events.json --out attr.json
 
-# 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）—— M5
+# 4) 产出删换建议报告（Markdown + HTML + JSON 三份，断网可开）—— M5 已可用
 opslens report --events events.json --out examples/
 
 # 5) 真值基准对账（引擎输出 vs 合成日志植入的真值）—— M4 已可用
@@ -52,14 +51,13 @@ opslens bench
 opslens bench --check
 ```
 
-> 尚未落地的子命令（`report`）会明确报"本构建尚未包含"并以退出码 2 退出，不会给出空结果。
-
 `python -m opslens <命令>` 与上面的 `opslens <命令>` 等价（两条通路都可用）。
 
 选项：
 - `--home <目录>`：数据源根目录，缺省为当前用户 home。**测试与演示请显式传临时目录**，避免误扫真实会话。
 - `--out <文件>`：`scan` / `aggregate` / `attribute` / `bench` 的产物输出路径（JSON）；省略则只打印摘要。
-- `--events <文件>`：`scan` 产出的事件流 JSON（`aggregate` / `attribute` 的输入）。
+- `--out <目录>`：`report` 的产物输出**目录**（写 `report.json` + `report.md` + `report.html` 三份）。
+- `--events <文件>`：`scan` 产出的事件流 JSON（`aggregate` / `attribute` / `report` 的输入）。
 - `--rules-dir <目录>`：规则包目录，缺省 `data/rules/`。
 - `--only <套件>`：`bench` 只跑指定套件（未知名 → 退出码 2）。
 - `--data-dir <目录>`：`bench` 的合成数据目录，缺省 `data/synthetic/`。
@@ -102,6 +100,44 @@ opslens bench --check
 - **"未启用"不冒充通过**：无生效规则 / 无失败样本等空分母情形 → 套件 `not_enabled=true` + notes + **退出码 1**。
 
 退出码：`0` 达标 / `1` 未达标（差异、未启用、或探活未变红）/ `2` 用法与未知名（如 `bench --only NOPE`）。
+
+### 删换建议报告（M5）
+
+`opslens report --events events.json --out <目录>` 产出**三份**产物（示例见
+[`examples/report.md`](examples/report.md) / [`examples/report.html`](examples/report.html)，
+基于合成数据，真实日志不入仓）：
+
+| 产物 | 格式 | 说明 |
+|---|---|---|
+| `report.json` | JSON（机读） | **单一渲染源**：所有结论的唯一结构化出处 |
+| `report.md` | Markdown（人读） | 由 `report.json` 渲染 |
+| `report.html` | HTML（人读） | 由 `report.json` 渲染；**内联 CSS、零外链**，断网可开 |
+
+**"两格式内容一致"是结构性质**：MD 与 HTML 都从同一份 `report.json` 渲染，
+不是两份各写各的再人工比对。
+
+报告必含五节：① 数据来源与覆盖声明（扫了哪些路径 / 哪些源 / schema 版本）；
+② **`unknown` 与样本缺失独立分区**（不混入统计）；③ 建议清单（每条附**口径 + 阈值取值 + 分子/分母 + 样本量**）；
+④ 未生效规则清单（含原因）；⑤ 定位宣言 + **"建议仅供参考，不自动修改配置"**。
+
+建议类型与触发（阈值全部可配，落 `data/rules/thresholds.json`）：
+
+| 建议 | 触发 | 必附证据 |
+|---|---|---|
+| `remove_candidate` | `failure_rate ≥ T_fail` **且** `calls_total ≥ N_min` | 失败率 + 分子/分母 + 样本量 |
+| `investigate` | `T_warn ≤ failure_rate < T_fail` 且样本量足够 | 同上 |
+| `cost_heavy` | `turn_token_avg ≥ T_tok` **且** `token_samples ≥ N_tok` | 均值 + 参与样本数 + 缺失数 |
+| `low_signal` | 样本不足 | **降级"数据不足"，不出建议** |
+
+三条纪律（均有守门测试）：
+
+- **渲染层零判定**（AST 守门）：`report/` 内**无 `BinOp(Div)`**、**不 import 聚合/归因/规则层**——
+  一切数字与判定只来自 `report.json`；报告层出现第二份比率计算会被口径唯一性守门判红。
+- **无外链硬断言常驻在渲染出口**：`markdown.render_markdown()` / `html.render_html()` 每次返回前都调
+  `assert_no_external_resources()`——不是"测试里验一次"，而是"含外链当场炸"。
+- **证据完整性硬门**：每条建议缺任一项证据（口径 / 阈值 / 分子分母 / 样本量）→ 该条**不输出**（视为内部错误）。
+
+退出码：命中"建议移除" → `1`（检出问题，不是跑挂）；无"建议移除" → `0`。
 
 ### 解析层（M2）已支持的范围
 

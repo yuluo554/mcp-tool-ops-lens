@@ -87,3 +87,28 @@ jobs:
           set -e
           test "$code" = "4" || { echo "expected exit 4, got $code"; exit 1; }
           grep -q "9.9.999" ci-future-err.txt || { echo "error message must name the unknown version"; exit 1; }
+
+      - name: Smoke report on synthetic data (writes MD/HTML/JSON, exit 1 = findings)
+        shell: bash
+        run: |
+          set +e
+          python -m opslens report --events ci-events.json --out ci-report
+          code=$?
+          test "$code" = "1" || { echo "expected exit 1 (findings), got $code"; exit 1; }
+          test -f ci-report/report.json || { echo "report.json not written"; exit 1; }
+          test -f ci-report/report.md || { echo "report.md not written"; exit 1; }
+          test -f ci-report/report.html || { echo "report.html not written"; exit 1; }
+          # 零外链硬门（断网可开）：产物不得含任何外部资源引用
+          ! grep -qE "https?://|<link|<script|<img|@import" ci-report/report.html || { echo "report.html contains external resources"; exit 1; }
+          ! grep -qE "https?://" ci-report/report.md || { echo "report.md contains external links"; exit 1; }
+
+      - name: Committed example report is byte-identical on regeneration
+        shell: bash
+        run: |
+          set -e
+          # examples/ 只入仓三份报告产物；事件流是中间件，由合成数据在 CI 内重建
+          python -m opslens scan --home data/synthetic --out ci-example-events.json
+          python -m opslens report --events ci-example-events.json --out ci-example-report
+          cmp ci-example-report/report.md examples/report.md || { echo "examples/report.md drifted"; exit 1; }
+          cmp ci-example-report/report.html examples/report.html || { echo "examples/report.html drifted"; exit 1; }
+          cmp ci-example-report/report.json examples/report.json || { echo "examples/report.json drifted"; exit 1; }

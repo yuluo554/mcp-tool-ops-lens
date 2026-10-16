@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 六项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -430,6 +430,87 @@ def main():
         "解析基线 F1 判定恒通过（基线假绿）",
     )
     results.append(_report("解析基线 F1 判定恒通过（基线假绿）", code, out))
+
+    # =======================================================================
+    # M5 变异项：报告层（模块 4）守门
+    # =======================================================================
+    report_dir = os.path.join(_REPO, "src", "opslens", "report")
+    guard_py = os.path.join(report_dir, "guard.py")
+    markdown_py = os.path.join(report_dir, "markdown.py")
+    html_py = os.path.join(report_dir, "html.py")
+    suggestions_py = os.path.join(report_dir, "suggestions.py")
+
+    # 31. 无外链硬断言：把渲染出口的常驻断言摘掉（产物不再校验外链）
+    code, out = _mutate(
+        guard_py,
+        "    hits = find_external_tokens(text)\n    if hits:",
+        "    hits = find_external_tokens(text)\n    if False:",
+        ["tests/test_report.py::test_guard_is_load_bearing_at_the_render_exit",
+         "tests/test_report.py::test_render_outputs_contain_no_external_resources"],
+        "渲染出口摘掉外链断言（断网可开失守）",
+    )
+    results.append(_report("渲染出口摘掉外链断言（断网可开失守）", code, out))
+
+    # 32. 渲染层零判定：把除法挪进 Markdown 渲染器（第二份比率计算的真实故障形态）
+    code, out = _mutate(
+        markdown_py,
+        "def _formatter(payload):",
+        "def _formatter(payload):\n    _leak = 1 / 2",
+        ["tests/test_report.py::test_report_package_has_no_division",
+         "tests/test_aggregate.py::test_binop_div_only_in_aggregate_and_attribute_and_generator"],
+        "报告层引入除法（渲染层零判定被破坏）",
+    )
+    results.append(_report("报告层引入除法（渲染层零判定被破坏）", code, out))
+
+    # 33. 样本门：把小样本也判成可出建议（"建议移除"在小样本上出现 = 硬违规）
+    code, out = _mutate(
+        suggestions_py,
+        "    if calls_total < min_calls:",
+        "    if False:",
+        ["tests/test_report.py::test_sample_gate_degrades_to_insufficient_data",
+         "tests/test_report.py::test_sample_gate_is_load_bearing",
+         "tests/test_report.py::test_failure_suggestion_matches_truth_per_server"],
+        "样本门被摘掉（小样本也出建议）",
+    )
+    results.append(_report("样本门被摘掉（小样本也出建议）", code, out))
+
+    # 34. 证据完整性硬门：改成恒通过（缺证据的建议也输出）
+    code, out = _mutate(
+        suggestions_py,
+        "    missing = [key for key in _REQUIRED_EVIDENCE if entry.get(key) is None]\n    if missing:",
+        "    missing = []\n    if missing:",
+        ["tests/test_report.py::test_evidence_gate_rejects_incomplete_entries",
+         "tests/test_report.py::test_every_suggestion_carries_full_evidence"],
+        "证据完整性硬门恒真（缺证据的建议也输出）",
+    )
+    results.append(_report("证据完整性硬门恒真（缺证据的建议也输出）", code, out))
+
+    # 35. 与真值对账：报告层不 import 引擎层的守门改成恒真（依赖方向铁律失效）
+    #     真实故障形态：有人在 report/ 里 import 聚合层去"顺手重算一遍"
+    code, out = _mutate(
+        markdown_py,
+        "from . import guard",
+        "from . import guard\nfrom .. import aggregate as _engine_leak",
+        ["tests/test_report.py::test_report_package_does_not_import_engine_or_rules",
+         "tests/test_report.py::test_forbidden_import_detector_actually_detects"],
+        "报告层 import 聚合层（依赖方向铁律失效）",
+    )
+    results.append(_report("报告层 import 聚合层（依赖方向铁律失效）", code, out))
+
+    # 36. 未生效规则清单：把"未生效规则"数据从报告载荷里抹掉（"未启用不冒充通过"的反面）
+    #     注意：只改渲染器的标题文案是**假变异**——`F-REFUSE-1` 仍会从"失败模式归因"节露出，
+    #     故守门不红（本项首版就是这么写的，跑出 exit=0 才发现）。
+    #     真实故障形态是"报告不再列出未生效规则清单"，故按**载荷装配处**变异。
+    report_init_py = os.path.join(report_dir, "__init__.py")
+    code, out = _mutate(
+        report_init_py,
+        '        "ineffective_rules": [dict(item) for item in attr["ineffective_rules"]],',
+        '        "ineffective_rules": [],',
+        ["tests/test_report.py::test_ineffective_rules_are_listed_with_reasons",
+         "tests/test_report.py::test_report_has_all_required_sections"],
+        "未生效规则清单从报告载荷消失",
+    )
+    results.append(_report("未生效规则清单从报告载荷消失", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

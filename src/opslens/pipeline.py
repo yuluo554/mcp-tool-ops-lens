@@ -4,8 +4,8 @@
 阈值/口径参数由 CLI 从规则包读出后**以参数注入**给解析层与聚合层，
 保证解析层仍是纯函数（不读规则包、不读时钟、不写盘）。
 
-本棒（M3）在 M2 的 scan 阶段之上接上 aggregate / attribute 两阶段；
-report / bench 阶段随 M5/M4 接入。
+本棒（M5）在 M3 的 attribute 阶段之上接上 report 阶段（模块 4）；
+bench 阶段由模块 5 自行编排（M4）。
 """
 
 from . import attribute as attribute_module
@@ -145,3 +145,20 @@ def aggregate_events(events, rules):
 def attribute_events(events, rules):
     """编排：事件流 → 归因载荷（模块 3）。零判定，直接转交 `attribute.attribute`。"""
     return attribute_module.attribute(events, rules)
+
+
+def report_events(events_report, agg_payload, attr_payload, rules, coverage_declaration=None):
+    """编排：三份载荷 + 阈值 → 报告载荷（模块 4）。
+
+    零判定：编排层只把**已算好的**数字与**以参数注入**的阈值转交给报告层装配，
+    自身不算任何比率、不读规则包（阈值从 `rules.thresholds` 摘出后传入）。
+    """
+    from . import report as report_module
+
+    return report_module.build_report(
+        events_report,
+        agg_payload,
+        attr_payload,
+        rules.thresholds,
+        coverage_declaration=coverage_declaration,
+    )

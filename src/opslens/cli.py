@@ -1,8 +1,8 @@
 """opslens 命令行入口：argparse + 退出码语义（plan/02 §六）。
 
 M2 起 `scan` 已接通解析层（模块 1）；M3 起 `aggregate` / `attribute` 接通聚合层与归因层
-（模块 2/3）；M4 起 `bench` 接通真值基准（模块 5）。尚未落地的子命令（`report`）
-**明确报"本构建尚未包含"并以用法码（2）退出**，绝不伪造空结果——
+（模块 2/3）；M4 起 `bench` 接通真值基准（模块 5）；M5 起 `report` 接通报告层（模块 4）。
+尚未落地的子命令**明确报"本构建尚未包含"并以用法码（2）退出**，绝不伪造空结果——
 骨架期的退出码 `3`（阶段未就绪）已随 M2 整项退役。
 
 用法：
@@ -28,7 +28,7 @@ from .config import ConfigError, load_rules
 PROG = "opslens"
 
 # 已接通的子命令（其余为"本构建尚未包含"）
-IMPLEMENTED_COMMANDS = ("scan", "aggregate", "attribute", "bench")
+IMPLEMENTED_COMMANDS = ("scan", "aggregate", "attribute", "report", "bench")
 
 # 需要规则包的子命令（口径参数以参数注入解析层/聚合层，保持两层纯函数）
 _RULES_COMMANDS = ("scan", "aggregate", "attribute", "report", "bench")
@@ -98,6 +98,17 @@ def _read_events(path):
     return pipeline.events_from_payload(payload)
 
 
+def _read_events_payload(path):
+    """读入事件流**载荷**（含 scan 阶段的来源声明：home / sources / schema_versions）。"""
+    if not os.path.isfile(path):
+        raise exit_codes.DataUnavailableError("事件流文件不存在：{0}".format(path))
+    try:
+        payload = serialize.read_json(path)
+    except ValueError as exc:
+        raise exit_codes.DataUnavailableError("事件流不是合法 JSON：{0}（{1}）".format(path, exc))
+    return payload
+
+
 def _run_aggregate(args, rules):
     events = _read_events(args.events)
     if not events:
@@ -160,6 +171,71 @@ def _run_attribute(args, rules):
     if args.out:
         sys.stdout.write("  - 归因结果已写出：{0}\n".format(args.out))
     return exit_codes.EXIT_OK
+
+
+def _run_report(args, rules):
+    """删换建议报告（模块 4）：单一渲染源 `report.json` → `report.md` + `report.html`。
+
+    退出码语义（README 明示）：命中"建议移除" → `1`（检出问题），否则 `0`。
+    """
+    events = _read_events(args.events)
+    if not events:
+        raise exit_codes.DataUnavailableError("事件流为空：{0}".format(args.events))
+
+    # 报告层消费"来源声明"：优先取 scan 产物里已声明的来源字段（home / sources / schema 版本），
+    # 缺字段即如实声明为空，绝不回落到自动发现（防误扫真实用户目录）。
+    raw = _read_events_payload(args.events)
+    events_report = {
+        "home": raw.get("home"),
+        "schema": raw.get("schema"),
+        "sources": raw.get("sources") or [],
+        "schema_versions": raw.get("schema_versions") or {},
+        "coverage_note": raw.get("coverage_note")
+        or "来源声明以 scan 阶段产物为准；本报告由事件流载荷装配。",
+    }
+    agg_payload = pipeline.aggregate_events(events, rules)
+    attr_payload = pipeline.attribute_events(events, rules)
+    payload = pipeline.report_events(events_report, agg_payload, attr_payload, rules)
+
+    from . import report as report_module
+
+    paths = report_module.render(payload, args.out)
+
+    summary = payload["summary"]
+    sys.stdout.write(
+        "[{0}] 报告完成：{1} 个 server / {2} 次调用（error {3} / unknown {4}）\n".format(
+            PROG,
+            summary["servers"],
+            summary["calls_total"],
+            summary["calls_error"],
+            summary["calls_unknown"],
+        )
+    )
+    sys.stdout.write(
+        "  - 建议 {0} 条（建议移除 {1} / 数据不足 {2} / 未生效规则 {3}）\n".format(
+            summary["suggestions"],
+            summary["remove_candidate"],
+            summary["insufficient_data"],
+            summary["ineffective_rules"],
+        )
+    )
+    for entry in payload["suggestions"]:
+        sys.stdout.write(
+            "      · [{0}] {1}/{2}：{3}={4}（{5}/{6}，样本 {7}）\n".format(
+                entry["type"],
+                entry["source"],
+                entry["server"],
+                entry["metric"],
+                entry["value"],
+                entry["numerator"],
+                entry["denominator"],
+                entry["sample_size"],
+            )
+        )
+    sys.stdout.write("  - 报告已写出：{0} / {1} / {2}\n".format(paths["json"], paths["markdown"], paths["html"]))
+    sys.stderr.write("[{0}] {1}\n".format(PROG, payload["positioning"]["not_auto_modify"]))
+
+    return report_module.exit_code_for(payload)
 
 
 def _default_home():
@@ -283,6 +359,8 @@ def main(argv=None):
             return _run_aggregate(args, rules)
         if args.command == "attribute":
             return _run_attribute(args, rules)
+        if args.command == "report":
+            return _run_report(args, rules)
         if args.command == "bench":
             return _run_bench(args, rules)
         return _not_in_this_build(args.command)

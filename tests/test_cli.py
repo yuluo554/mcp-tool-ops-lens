@@ -32,10 +32,10 @@ def test_every_command_has_help_text():
 
 
 def test_implemented_commands_track_the_built_modules():
-    """已落地子命令清单 = 当前已接通的模块面（M4：scan + aggregate + attribute + bench）。"""
-    assert IMPLEMENTED_COMMANDS == ("scan", "aggregate", "attribute", "bench")
-    # 未落地命令必须不在清单里（防"没做却被登记成已做"）
-    assert "report" not in IMPLEMENTED_COMMANDS
+    """已落地子命令清单 = 当前已接通的模块面（M5：五模块闭环齐备）。"""
+    assert IMPLEMENTED_COMMANDS == ("scan", "aggregate", "attribute", "report", "bench")
+    # 注册的子命令与已落地清单**逐一对应**（防"没做却被登记成已做"或反之）
+    assert set(IMPLEMENTED_COMMANDS) == set(_subparsers(build_parser()))
 
 
 def test_scan_accepts_home_flag():
@@ -85,12 +85,27 @@ def test_unimplemented_command_does_not_fake_results(capsys, rules_dir):
 
     骨架期这里给的是退出码 3（阶段未就绪）；该语义已随 M2 退役，
     现按"该命令在本构建里不可用"= 用法错误（2）处理。
-    M3 起 `attribute` 已落地，故此处改用仍未落地的 `report` 作为探针。
+
+    M5 起五个子命令**全部落地**，故已无"未落地子命令"可作探针——
+    本测试改为**直接打那个兜底函数**（`_not_in_this_build`），
+    保住"绝不伪造空结果"这条纪律：任何将来新增但未接通的子命令都会走它。
     """
-    code = main(["report", "--events", "nope.json", "--out", "out", "--rules-dir", rules_dir])
+    from opslens.cli import _not_in_this_build
+
+    code = _not_in_this_build("future-command")
     captured = capsys.readouterr()
     assert code == exit_codes.EXIT_USAGE
     assert "尚未包含" in captured.err
+    assert "future-command" in captured.err
+
+
+def test_no_registered_command_falls_through_to_the_fallback(rules_dir):
+    """兜底路径不得被已注册命令走到：五个子命令都必须有自己的 handler。"""
+    subs = set(_subparsers(build_parser()))
+    assert subs == set(IMPLEMENTED_COMMANDS)
+    # 每个已落地命令都必须能真正跑通（而非落到"尚未包含"）——用 report 缺文件验一条
+    code = main(["report", "--events", "definitely-missing.json", "--out", "out", "--rules-dir", rules_dir])
+    assert code == exit_codes.EXIT_DATA_UNAVAILABLE, "report 落到了兜底/未落地路径"
 
 
 def test_missing_rules_dir_is_data_unavailable(tmp_home, capsys):

@@ -99,7 +99,8 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 - 打包器 `tools/package_release.py`：打包面 = `git ls-files`（`core.quotepath=off` 防中文八进制转义）；
   `ZIP_STORED` + 条目按路径排序 + 全条目固定 `date_time`（发布基准日）+ 固定外部属性 0644。
 - **两跑逐字节一致**（实测 sha256 相同）。
-- 发布 zip sha256：`62fd51597b806faac642bb15d308e268d029bbeae41dcc9bb5b6ce9820569486`（1019228 字节，75 个跟踪文件）。
+- 发布 zip sha256：`b91c38f9f0c7fd196f62347550c64aebe99352182616de8291f36c8c0ff5288d`（76 个跟踪文件）。
+  （首版 `62fd5159…` 因 §六 记录的缺陷已作废，见下。）
 
 **发布物本体复核**（与"冻结态/本机构建"是两回事——只验本机产物证明不了"下载回来的那份"）：
 
@@ -126,12 +127,19 @@ CI 检出形态（`--depth 1 --no-tags`）**285 passed**（本仓库测试不依
 > 本节为发布**结果性回写**（需要发布结果才能写的内容）——按纪律走**发布后小提交**推送并等 CI 复绿，
 > **不迁 tag**（tag 所指 = 发布物基线 + 拍板留档）。
 
-- `gh release download` 真下载附件（**必须在仓库目录内跑**）→ 下载件 sha256 与 §六留档值**逐位一致**。
-- 下载 zip 解压到**中立目录**（仓库树外）→ 跑 `opslens bench` / `pytest` 自检通过。
-- `gh release view --json assets,tagName,isDraft` → `isDraft=false` + 资产在列。
-- `gh run list` 与 push/tag 事件按 `head_sha` 逐条配对（见下 §八·补记）。
+**复核时序（如实留痕，含"动作先于修正发生"这一瑕疵）**：
 
-（具体 run id / release URL / 下载件 sha256 见 §八·补记，由发布后小提交回填。）
+1. **首次发布**：tag v0.1.0 + `gh release create`（附件首版 `62fd5159…`）。
+2. **本体复核**：`gh release download` 真下载 → sha256 与首版留档**逐位一致**；解压到中立目录跑全量测试
+   → **1 failed**（审计器无 git 兜底，见 §六）。
+3. **修复 + 重建 + 迁移 tag**（零消费者窗口内）：修复提交 `2c4b9f6d` CI 绿 → 重建附件（新 sha256
+   `b91c38f9…`）→ 删除旧 tag/Release → 在新基线重打 tag + `gh release create`（`--verify-tag`）→
+   复验 `isDraft=false` + 附件在列 + 真下载 sha256 与**新留档值**逐位一致 + 中立目录复跑 285 passed。
+4. **本文件**随终态提交入仓（tag 所指 = 含本记录完整内容的提交）。
+
+**结论**：`gh release view --json assets,tagName,isDraft` → `isDraft=false`、`tagName=v0.1.0`、
+附件 `mcp-tool-ops-lens-0.1.0-src.zip`（sha256 `b91c38f9…`）在列。
+`gh run list` 与 push/tag 事件按 `head_sha` 逐条配对见 §四（tag push 实测**会**触发独立一轮 run）。
 
 ## 九、缓议项与待核对项全表清零
 

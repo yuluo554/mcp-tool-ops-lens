@@ -1,5 +1,7 @@
 # mcp-tool-ops-lens
 
+[![CI](https://github.com/yuluo554/mcp-tool-ops-lens/actions/workflows/ci.yml/badge.svg)](https://github.com/yuluo554/mcp-tool-ops-lens/actions/workflows/ci.yml)
+
 > **你往 agent 里加了十几个 MCP server，但哪个失败率最高？每次调用吃多少 token？哪个纯属拖慢 agent？**
 > ——从本机会话日志统计每个 MCP server / 工具的调用、失败、token 开销，给出可执行的删/换建议。
 
@@ -23,11 +25,16 @@ AI 编程 agent 重度依赖 MCP server 与内置工具，但用户对这些工�
 
 ```bash
 git clone <本仓库地址>
-cd 10-16-2-mcp-tool-ops-lens
-pip install -e ".[dev]"
+cd mcp-tool-ops-lens
+python -m venv .venv
+# Windows: .venv\Scripts\activate   /  Linux、macOS: source .venv/bin/activate
+python -m pip install -U pip        # Python 3.8 自带 pip 20.2.3 无法可编辑安装 pyproject-only 项目
+python -m pip install -e ".[dev]"
 ```
 
 要求 Python ≥ 3.8，运行时**零第三方依赖**（`dev` extra 只装 pytest，用于跑测试）。
+用 `python -m pip`（而非裸 `pip`）以便 venv 内安装；**已激活 venv 时不要用 Windows 的 `py`
+启动器**——`py` 走独立 launcher，会把包装到系统 Python 而非 venv。
 
 ## 使用
 
@@ -219,6 +226,14 @@ pytest -q
 
 纪律（均有守门测试）：零第三方依赖、零出网、无时钟无随机、确定性写盘（同输入逐字节一致）、
 阈值全部来自 `data/rules/*.json`（代码零阈值字面量）。
+
+## 已知环境问题
+
+- **wheel（非 editable）安装下默认规则目录解析不到**：规则包 `data/rules/*.json` **不在 wheel 内**
+  （`pyproject.toml` 未声明 `package-data`），`config.default_rules_dir()` 的"包外三级"定位只对
+  源码态 / `pip install -e` 成立。故 wheel 安装后必须显式传 `--rules-dir <仓库>/data/rules`，
+  否则以退出码 4 报 `规则目录不存在`（**已实测，不是推测**）。首期发布物是**源码包 + editable 安装**
+  （README 快速开始那条命令），不受影响。M6 实测留档见 `plan/verify/README.md` §三。
 
 ## 许可
 

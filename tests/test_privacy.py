@@ -179,8 +179,8 @@ def test_desensitize_auditor_selftest_and_tracked_scan_are_clean():
     """
     module = _audit_module()
     module.selftest()  # 阳性/阴性对照（坏了会 AssertionError）
-    text_scanned, tracked_total, hits = module._scan_tracked_text()
-    assert tracked_total >= 40, "跟踪面过小（{0}），审计器可能空转".format(tracked_total)
+    text_scanned, tracked_total, hits, _source = module._scan_tracked_text()
+    assert tracked_total >= 40, "扫描面过小（{0}），审计器可能空转".format(tracked_total)
     assert text_scanned >= 40, "文本扫描面过小（{0}）".format(text_scanned)
     _bin_scanned, bin_hits = module._scan_binary()
     assert hits == [] and bin_hits == [], "脱敏审计硬门命中：{0}".format(hits + bin_hits)
@@ -199,3 +199,25 @@ def test_desensitize_auditor_selftest_and_tracked_scan_are_clean():
         assert "fetch-depth: 0" in window, (
             "ci.yml 的 checkout 未配 fetch-depth: 0（浅克隆会让脱敏审计的历史扫描空验）"
         )
+
+    # ④ 无 git 兜底：导出树（git archive / 源码 zip 解压）没有 `.git`，审计器必须退回
+    #    文件系统遍历而**不崩**——本项目 M6 发布物自检实录：首版硬依赖 `git ls-files`，
+    #    在解压出来的源码 zip 里直接 SystemExit（发布物本体复核当场抓出）。
+    #    断言方式：把 _REPO 指到一个无 .git 的临时树，走 _tracked_names() 必须返回非空清单。
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        os.makedirs(os.path.join(tmp, "pkg"))
+        with open(os.path.join(tmp, "pkg", "a.py"), "w", encoding="utf-8") as handle:
+            handle.write("x = 1\n")
+        os.makedirs(os.path.join(tmp, ".venv"))
+        with open(os.path.join(tmp, ".venv", "pyvenv.cfg"), "w", encoding="utf-8") as handle:
+            handle.write("home = x\n")
+        saved = module._REPO
+        try:
+            module._REPO = tmp
+            names, source = module._tracked_names()
+        finally:
+            module._REPO = saved
+        assert "pkg/a.py" in names, "无 .git 兜底未扫到普通文件：{0}".format(names)
+        assert not any(n.startswith(".venv/") for n in names), "无 .git 兜底未剪掉 venv"
+        assert source != "git ls-files", "无 .git 树不应走 git 通路"

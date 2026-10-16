@@ -83,11 +83,41 @@ def _personal_markers():
     return markers
 
 
+_SKIP_DIRS = (".git", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".egg-info", "dist", "build")
+
+
+def _is_tracked_tree():
+    """是否处于 git 工作树（有 `.git`）。"""
+    return os.path.isdir(os.path.join(_REPO, ".git"))
+
+
+def _tracked_names():
+    """跟踪面清单；**无 git 兜底**：导出树（git archive / 源码 zip 解压）无 `.git`，
+    此时退回文件系统遍历（按特征剪掉 venv/缓存/构建目录，不按名字猜）。
+
+    释放树是"证明跟踪树本身可跑通"的常用形态（skill 阶段 7），
+    而依赖 git 的扫描器若不做兜底，在无 `.git` 树里会直接崩——本项目 M6 发布物自检实录。
+    """
+    if _is_tracked_tree():
+        rc, listing = _git("ls-files")
+        if rc == 0:
+            names = [f for f in listing.splitlines() if f.strip()]
+            if names:
+                return names, "git ls-files"
+    names = []
+    for dirpath, dirnames, filenames in os.walk(_REPO):
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.endswith(".egg-info")]
+        if "pyvenv.cfg" in filenames:
+            continue  # 就地建的 venv 不算跟踪树
+        for name in sorted(filenames):
+            full = os.path.join(dirpath, name)
+            rel = os.path.relpath(full, _REPO).replace(os.sep, "/")
+            names.append(rel)
+    return sorted(names), "filesystem walk (无 .git 兜底)"
+
+
 def _scan_tracked_text():
-    rc, listing = _git("ls-files")
-    if rc != 0:
-        raise SystemExit("[audit] git ls-files 失败")
-    files = [f for f in listing.splitlines() if f.strip()]
+    files, source = _tracked_names()
     hits = []
     scanned = 0
     for name in files:
@@ -112,12 +142,11 @@ def _scan_tracked_text():
                     continue
                 line = text.count("\n", 0, match.start()) + 1
                 hits.append(("step2_content", "{0}:{1}".format(name, line), "{0} {1}".format(pname, _mask(value))))
-    return scanned, len(files), hits
+    return scanned, len(files), hits, source
 
 
 def _scan_binary():
-    rc, listing = _git("ls-files")
-    files = [f for f in listing.splitlines() if f.strip()]
+    files, _source = _tracked_names()
     markers = _personal_markers()
     hits = []
     scanned = 0
@@ -142,6 +171,10 @@ def _scan_binary():
 
 
 def _scan_history():
+    if not _is_tracked_tree():
+        # 无 .git（导出树 / 源码 zip 解压）：历史面**根本不存在**——显式报出，
+        # 不静默当作"历史干净"（"我没扫到东西"要大声说）。
+        return None, [], "无 .git（导出树，历史扫描不适用）"
     rc, revs_out = _git("rev-list", "--all")
     revs = [r for r in revs_out.splitlines() if r.strip()]
     if not revs:
@@ -225,14 +258,15 @@ def main():
         return 0
 
     print("[audit] 仓库：{0}".format(os.path.basename(_REPO)))
-    text_scanned, tracked_total, hits = _scan_tracked_text()
-    print("[audit] 第1步 跟踪文件名扫描：{0} 个跟踪文件".format(tracked_total))
-    assert tracked_total >= 40, "跟踪面过小（{0}），疑似空转".format(tracked_total)
-    print("[audit] 第2步 跟踪文本内容扫描：{0} 个文本文件".format(text_scanned))
+    text_scanned, tracked_total, hits, source = _scan_tracked_text()
+    print("[audit] 扫描面来源：{0}".format(source))
+    print("[audit] 第1步 跟踪文件名扫描：{0} 个文件".format(tracked_total))
+    assert tracked_total >= 40, "扫描面过小（{0}），疑似空转".format(tracked_total)
+    print("[audit] 第2步 文本内容扫描：{0} 个文本文件".format(text_scanned))
     assert text_scanned >= 40, "文本扫描面过小（{0}）".format(text_scanned)
 
     bin_scanned, bin_hits = _scan_binary()
-    print("[audit] 第3步 二进制样例扫描：{0} 个二进制跟踪文件".format(bin_scanned))
+    print("[audit] 第3步 二进制样例扫描：{0} 个二进制文件".format(bin_scanned))
     hits.extend(bin_hits)
 
     if args.tracked_only:
@@ -243,10 +277,13 @@ def main():
         hits.extend(hist_hits)
         emails, meta_hits = _scan_commit_metadata()
         hits.extend(meta_hits)
-        if revs == 1 and not args.tracked_only:
+        if revs == 1:
             print("[audit] 第4步 全历史扫描：浅克隆（只见 1 提交）——历史面无法成立")
             print("[audit] 结论：INCOMPLETE（浅克隆下全历史扫描为空，需 fetch-depth: 0）")
             return 2
+        if revs is None:
+            # 无 .git：历史面不适用，但跟踪面（1–3 步）已扫过——如实声明，不冒充"历史已验"
+            print("[audit] 第4步 全历史扫描：不适用（{0}）".format(note))
 
     for step, where, what in hits:
         print("  [HIT] {0} {1} <- {2}".format(step, where, what))
@@ -254,7 +291,6 @@ def main():
         ", ".join(_mask(e) for e in emails) if emails else "(未扫)"))
     if revs is not None:
         print("[audit] 第4步 全历史扫描：{0} 个提交{1}".format(revs, ("（" + note + "）") if note else ""))
-
     if hits:
         print("[audit] 结论：FAIL（{0} 处硬门命中）".format(len(hits)))
         return 1

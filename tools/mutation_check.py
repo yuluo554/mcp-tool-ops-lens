@@ -7,7 +7,7 @@
   · 一律 try/finally 还原，还原后 assert 字节一致（防源码残留变异）。
   · marker 足够长以唯一定位代码行，不撞 docstring。
 
-M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 三项。用法：py -X utf8 tools/mutation_check.py
+M1 十项 + M2 六项 + M3 八项 + M4 六项 + M5 六项 + M6 四项。用法：py -X utf8 tools/mutation_check.py
 """
 
 import io
@@ -547,6 +547,19 @@ def main():
         "CI checkout 摘掉 fetch-depth（历史扫描空验）",
     )
     results.append(_report("CI checkout 摘掉 fetch-depth（历史扫描空验）", code, out))
+
+    # 40.（M6 新增）无 git 兜底失效：把"退回文件系统遍历"改成"直接崩" → 守门必红
+    #     真实故障形态：首版硬依赖 `git ls-files`，在无 .git 的源码 zip 解压树里 SystemExit
+    #     （本项目 M6 发布物本体复核当场抓出）。正解 = 无 git 时退回文件系统遍历，不崩。
+    #     注意：变异必须是"崩"而非"仍走 git 通路"——后者 git 失败后仍会落到 os.walk（假变异）。
+    code, out = _mutate(
+        audit_py,
+        '    names = []\n    for dirpath, dirnames, filenames in os.walk(_REPO):',
+        '    raise SystemExit("[audit] git ls-files 失败")\n    names = []\n    for dirpath, dirnames, filenames in os.walk(_REPO):',
+        ["tests/test_privacy.py::test_desensitize_auditor_selftest_and_tracked_scan_are_clean"],
+        "无 git 兜底失效（导出树里直接崩）",
+    )
+    results.append(_report("无 git 兜底失效（导出树里直接崩）", code, out))
 
     print("")
     print("变异验证结果：{0}/{1} 通过".format(sum(1 for r in results if r), len(results)))

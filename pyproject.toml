@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-tool-ops-lens"
 description = "MCP/工具调用失败率与上下文开销归因 CLI（纯本地、零上传、零第三方依赖）"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "yuluo554" }]
 keywords = ["mcp", "claude-code", "codex", "observability", "attribution"]
 dynamic = ["version"]

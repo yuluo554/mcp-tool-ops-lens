@@ -2,6 +2,16 @@ name: CI
 
 on: [push, pull_request, workflow_dispatch]
 
+# 最小权限：CI 只读仓库内容（不写 issue/PR/status）。写权限一律显式加到需要的 job，
+# 免得 `pull_request` 上默认的读写令牌把权限面敞开。
+permissions:
+  contents: read
+
+# 同 ref 上推新提交时取消旧跑：旧 run 的结果已被新提交作废，留着只是排队与噪声。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: pytest (${{ matrix.os }} · py${{ matrix.python }})
@@ -9,20 +19,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # v0.1.0 迭代起下限抬到 3.12：更早的解释器线均已 EOL 或于本月到期（细节见 plan/06 D4）。
+        # 声明已 EOL 的解释器等于替用户承担未打补丁的风险。
+        # 想加回旧版本时先读 pyproject 的 requires-python——两处必须同步。
         os: [ubuntu-latest, windows-latest]
-        python: ["3.8", "3.12"]
+        python: ["3.12"]
     env:
       # 本机习惯 -X utf8 救不了 CI 里的 python -m pytest：这里是唯一能覆盖全部步骤的开关。
       PYTHONUTF8: "1"
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # 脱敏审计器第 4 步是**全历史**扫描：浅克隆（默认 fetch-depth: 1）下只见 1 个提交
           # → 历史面无法成立（审计器会以 exit 2 明确报"浅克隆"而非静默空扫）。
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 

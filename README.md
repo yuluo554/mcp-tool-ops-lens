@@ -7,9 +7,13 @@
 
 纯本地 Python CLI：**零上传、零遥测、零第三方依赖、不使用任何模型**。统计是确定性计数，归因是规则匹配。
 
-> 状态：**✅ v0.1.0 已发布**（[Release](https://github.com/yuluo554/mcp-tool-ops-lens/releases/tag/v0.1.0) ·
-> CI 四矩阵绿）。六个里程碑 M0–M6 全部完成；发布留档见 [`plan/RELEASE-M6.md`](plan/RELEASE-M6.md)。
+> 状态：**✅ v0.2.0 已发布**（[Release](https://github.com/yuluo554/mcp-tool-ops-lens/releases/tag/v0.2.0) ·
+> CI 两矩阵绿）。六个里程碑 M0–M6 全部完成；发布留档见 [`plan/RELEASE-M6.md`](plan/RELEASE-M6.md)
+> 与 [`plan/RELEASE-v0.2.0.md`](plan/RELEASE-v0.2.0.md)。
 > 五个子命令**全部落地**：`scan`（解析）、`aggregate`（两级统计）、`attribute`（失败分类）、`report`（删换建议报告 MD/HTML/JSON）、`bench`（真值基准对账）。
+>
+> **v0.2.0 是破坏性变更（minor）**：Python 下限从 3.8 抬到 **3.12**（更早的解释器线均已 EOL）。
+> 判定逻辑、规则包内容、合成数据、发布物形态一律未变——升版原因是安装面与元数据，不是口径。
 >
 > 管理侧工具已有很多（agent-deck 等），"可靠性 + 开销归因"侧近乎空白——这是本项目的定位。
 
@@ -29,11 +33,11 @@ git clone <本仓库地址>
 cd mcp-tool-ops-lens
 python -m venv .venv
 # Windows: .venv\Scripts\activate   /  Linux、macOS: source .venv/bin/activate
-python -m pip install -U pip        # Python 3.8 自带 pip 20.2.3 无法可编辑安装 pyproject-only 项目
+python -m pip install -U pip        # 保证 pip 够新（可编辑安装 pyproject-only 项目需 pip ≥ 21.3）
 python -m pip install -e ".[dev]"
 ```
 
-要求 Python ≥ 3.8，运行时**零第三方依赖**（`dev` extra 只装 pytest，用于跑测试）。
+要求 Python ≥ 3.12，运行时**零第三方依赖**（`dev` extra 只装 pytest，用于跑测试）。
 用 `python -m pip`（而非裸 `pip`）以便 venv 内安装；**已激活 venv 时不要用 Windows 的 `py`
 启动器**——`py` 走独立 launcher，会把包装到系统 Python 而非 venv。
 
@@ -166,7 +170,7 @@ opslens bench --check
 | 0 | 成功 |
 | 1 | 运行完成但**检出问题**（如命中"建议移除"、基准未达标）——不是跑挂 |
 | 2 | 用法错误 / 未知名 / 参数非法 / **本构建尚未包含的命令** |
-| 4 | 数据不可用（数据源目录不存在或为空 / schema 版本不识别） |
+| 4 | 数据不可用（数据源目录不存在或为空 / schema 版本不识别 / **缺规则目录**——wheel 安装且未传 `--rules-dir`） |
 
 > 退出码 `3`（阶段未就绪）是骨架期的占位语义，已随 M2 解析层落地**整项退役**；
 > 测试用 `not hasattr` 断言防其复活。
@@ -235,6 +239,9 @@ pytest -q
   源码态 / `pip install -e` 成立。故 wheel 安装后必须显式传 `--rules-dir <仓库>/data/rules`，
   否则以退出码 4 报 `规则目录不存在`（**已实测，不是推测**）。首期发布物是**源码包 + editable 安装**
   （README 快速开始那条命令），不受影响。M6 实测留档见 `plan/verify/README.md` §三。
+  该行为已由 `tests/test_install_contract.py` **钉成契约**（安装态 `bench` 必须退出码 4 且报
+  「规则目录不存在」；补上 `--rules-dir`/`--data-dir` 后必须退出码 0）——若把规则包塞进 wheel
+  或让缺规则静默成功，该测试即变红。
 
 ## 许可
 
